@@ -32,18 +32,31 @@ export interface EventFrame {
   payload: Record<string, unknown>;
 }
 
-export type Frame = AuthFrame | AuthOKFrame | RequestFrame | ResponseFrame | EventFrame;
+export type Frame =
+  | AuthFrame
+  | AuthOKFrame
+  | RequestFrame
+  | ResponseFrame
+  | EventFrame;
 
 // --- Constants ---
 export const METHODS = [
-  'health', 'chat.send', 'chat.abort', 'sessions.list', 'chat.history',
+  'health',
+  'chat.send',
+  'chat.abort',
+  'sessions.list',
+  'chat.history',
 ] as const;
-export type Method = typeof METHODS[number];
+export type Method = (typeof METHODS)[number];
 
 export const EVENTS = [
-  'chat.delta', 'chat.final', 'chat.error', 'agent.tool', 'health',
+  'chat.delta',
+  'chat.final',
+  'chat.error',
+  'agent.tool',
+  'health',
 ] as const;
-export type EventName = typeof EVENTS[number];
+export type EventName = (typeof EVENTS)[number];
 
 // --- Method Param Types ---
 export interface ChatSendParams {

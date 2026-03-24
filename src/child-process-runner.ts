@@ -1,10 +1,12 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
+import { readFileSync, existsSync } from 'fs';
 
 export interface SpawnOptions {
   sessionKey: string;
   model: string;
   systemPrompt: string;
+  initialPrompt?: string; // If set, passed as positional arg to `claude -p <message>`
   onOutput?: (data: string) => void;
   onError?: (data: string) => void;
   onExit?: (code: number | null) => void;
@@ -17,6 +19,39 @@ export interface AgentSession {
   startedAt: Date;
 }
 
+/**
+ * Load key=value pairs from a .env file and return as a Record.
+ * Skips blank lines and comments (#). Strips optional quotes from values.
+ */
+function loadDotEnv(path: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  if (!existsSync(path)) return env;
+  try {
+    const content = readFileSync(path, 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      // Strip surrounding quotes (single or double)
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      env[key] = val;
+    }
+  } catch {
+    // If the file can't be read, return empty — don't crash the spawn
+  }
+  return env;
+}
+
+const DOTENV_PATH = '/home/node/.nanoclaw/.env';
+
 export class ChildProcessRunner extends EventEmitter {
   private sessions = new Map<string, AgentSession>();
   private maxConcurrent: number;
@@ -28,27 +63,32 @@ export class ChildProcessRunner extends EventEmitter {
 
   async spawn(opts: SpawnOptions): Promise<AgentSession> {
     if (this.sessions.size >= this.maxConcurrent) {
-      throw new Error(
-        `Max concurrent agents reached (${this.maxConcurrent})`,
-      );
+      throw new Error(`Max concurrent agents reached (${this.maxConcurrent})`);
     }
     if (this.sessions.has(opts.sessionKey)) {
       throw new Error(`Session ${opts.sessionKey} already exists`);
     }
 
     const args = [
+      '-p', // Print/pipe mode — required for non-interactive use
       '--model',
       opts.model,
       '--output-format',
       'stream-json',
-      ...(opts.systemPrompt
-        ? ['--system-prompt', opts.systemPrompt]
-        : []),
+      '--dangerously-skip-permissions', // Required — no TTY to accept permissions
+      ...(opts.systemPrompt ? ['--system-prompt', opts.systemPrompt] : []),
+      ...(opts.initialPrompt ? [opts.initialPrompt] : []), // Positional arg: the user message
     ];
+
+    // Merge process.env with .env file written by ApplyConfig (contains
+    // ANTHROPIC_API_KEY for dev or ANTHROPIC_BASE_URL for Bifrost/prod).
+    // .env values take precedence so the config bridge can override defaults.
+    const dotEnv = loadDotEnv(DOTENV_PATH);
+    const childEnv = { ...process.env, ...dotEnv };
 
     const proc = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env }, // Inherits ANTHROPIC_BASE_URL (Bifrost sidecar)
+      env: childEnv,
     });
 
     const session: AgentSession = {
@@ -65,7 +105,9 @@ export class ChildProcessRunner extends EventEmitter {
     });
 
     proc.stderr?.on('data', (data: Buffer) => {
-      opts.onError?.(data.toString());
+      const str = data.toString();
+      opts.onError?.(str);
+      this.emit('stderr', opts.sessionKey, str);
     });
 
     proc.on('exit', (code) => {

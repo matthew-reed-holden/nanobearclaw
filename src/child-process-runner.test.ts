@@ -58,10 +58,12 @@ describe('ChildProcessRunner', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       'claude',
       [
+        '-p',
         '--model',
         'claude-sonnet-4-20250514',
         '--output-format',
         'stream-json',
+        '--dangerously-skip-permissions',
         '--system-prompt',
         'You are a helpful assistant.',
       ],
@@ -81,11 +83,30 @@ describe('ChildProcessRunner', () => {
     });
     expect(spawnMock).toHaveBeenCalledWith(
       'claude',
+      ['-p', '--model', 'claude-sonnet-4-20250514', '--output-format', 'stream-json', '--dangerously-skip-permissions'],
+      expect.anything(),
+    );
+    await runner.killAll();
+  });
+
+  it('should pass initialPrompt as positional arg after flags', async () => {
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    await runner.spawn({
+      sessionKey: 'with-prompt',
+      model: 'claude-sonnet-4-20250514',
+      systemPrompt: '',
+      initialPrompt: 'Hello, world!',
+    });
+    expect(spawnMock).toHaveBeenCalledWith(
+      'claude',
       [
+        '-p',
         '--model',
         'claude-sonnet-4-20250514',
         '--output-format',
         'stream-json',
+        '--dangerously-skip-permissions',
+        'Hello, world!',
       ],
       expect.anything(),
     );
@@ -142,9 +163,7 @@ describe('ChildProcessRunner', () => {
     // Let the event loop process the data event
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(onOutput).toHaveBeenCalledWith(
-      expect.stringContaining('assistant'),
-    );
+    expect(onOutput).toHaveBeenCalledWith(expect.stringContaining('assistant'));
     await runner.kill(session.sessionKey);
   });
 
@@ -161,9 +180,7 @@ describe('ChildProcessRunner', () => {
     fakeProc.stderr.push('Warning: something happened\n');
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(onError).toHaveBeenCalledWith(
-      expect.stringContaining('Warning'),
-    );
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Warning'));
     await runner.killAll();
   });
 
@@ -208,9 +225,9 @@ describe('ChildProcessRunner', () => {
 
   it('should throw when sending to nonexistent session', async () => {
     const runner = new ChildProcessRunner({ maxConcurrent: 2 });
-    await expect(
-      runner.sendMessage('nonexistent', 'hello'),
-    ).rejects.toThrow(/not found/i);
+    await expect(runner.sendMessage('nonexistent', 'hello')).rejects.toThrow(
+      /not found/i,
+    );
   });
 
   it('should report activeCount correctly', async () => {
