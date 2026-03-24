@@ -70,7 +70,9 @@ COPY dist/management/ ./dist/management/
 RUN chown -R node:node /workspace && chmod 777 /home/node
 
 # Ensure .nanoclaw config directory exists (config bridge writes .env here)
-RUN mkdir -p /home/node/.nanoclaw
+# Must be owned by node user since container runs as node and ApplyConfig
+# writes the .env file via docker exec as the container user.
+RUN mkdir -p /home/node/.nanoclaw && chown node:node /home/node/.nanoclaw
 
 # Expose management API port
 EXPOSE 18789

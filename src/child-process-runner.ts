@@ -87,6 +87,16 @@ export class ChildProcessRunner extends EventEmitter {
     const dotEnv = loadDotEnv(DOTENV_PATH);
     const childEnv = { ...process.env, ...dotEnv };
 
+    // Pre-flight: Claude CLI requires ANTHROPIC_API_KEY (or OAuth state in
+    // ~/.claude/) to authenticate. Without it, the CLI exits with "Not logged
+    // in · Please run /login". Fail fast with a clear message instead.
+    if (!childEnv.ANTHROPIC_API_KEY && !childEnv.ANTHROPIC_BASE_URL) {
+      throw new Error(
+        'No Anthropic credentials configured. Call ApplyConfig with your ' +
+        'ANTHROPIC_API_KEY before sending messages.'
+      );
+    }
+
     const proc = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,

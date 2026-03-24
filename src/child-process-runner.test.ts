@@ -39,10 +39,13 @@ const spawnMock = vi.mocked(spawn);
 describe('ChildProcessRunner', () => {
   beforeEach(() => {
     fakeProc = createFakeProcess();
+    // Ensure the pre-flight API key check passes in tests
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
   });
 
   afterEach(async () => {
     vi.clearAllMocks();
+    delete process.env.ANTHROPIC_API_KEY;
   });
 
   it('should spawn a child process for an agent session', async () => {
@@ -304,5 +307,32 @@ describe('ChildProcessRunner', () => {
     const runner = new ChildProcessRunner({ maxConcurrent: 2 });
     // Should not throw
     await runner.kill('does-not-exist');
+  });
+
+  it('should throw when no Anthropic credentials are configured', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_BASE_URL;
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    await expect(
+      runner.spawn({
+        sessionKey: 'no-creds',
+        model: 'claude-sonnet-4-20250514',
+        systemPrompt: '',
+      }),
+    ).rejects.toThrow(/No Anthropic credentials configured/);
+  });
+
+  it('should allow spawn when ANTHROPIC_BASE_URL is set instead of API key', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_BASE_URL = 'http://bifrost:8080';
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    const session = await runner.spawn({
+      sessionKey: 'bifrost-test',
+      model: 'claude-sonnet-4-20250514',
+      systemPrompt: '',
+    });
+    expect(session).toBeDefined();
+    await runner.killAll();
+    delete process.env.ANTHROPIC_BASE_URL;
   });
 });

@@ -1,15 +1,15 @@
 import { ChildProcessRunner } from './child-process-runner.js';
 import { ManagementServer } from './management/server.js';
-import { setRunner, sessionRunIds } from './management/handlers.js';
+import { setRunner, setManagementServer, sessionRunIds } from './management/handlers.js';
 
 const MANAGEMENT_PORT = parseInt(process.env.MANAGEMENT_PORT || '18789');
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '3');
 
 async function main() {
   const runner = new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
-  setRunner(runner);
-
   const server = new ManagementServer({ port: MANAGEMENT_PORT });
+  setRunner(runner);
+  setManagementServer(server);
   await server.start();
   console.log(
     `NanoClaw PaaS management API listening on port ${MANAGEMENT_PORT}`,

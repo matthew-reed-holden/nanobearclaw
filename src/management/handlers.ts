@@ -1,6 +1,8 @@
 import type { ChildProcessRunner } from '../child-process-runner.js';
+import type { ManagementServer } from './server.js';
 
 let runner: ChildProcessRunner;
+let mgmtServer: ManagementServer | null = null;
 const startTime = Date.now();
 
 // Maps sessionKey → the runId of its most recent chat.send.
@@ -9,6 +11,10 @@ export const sessionRunIds = new Map<string, string>();
 
 export function setRunner(r: ChildProcessRunner): void {
   runner = r;
+}
+
+export function setManagementServer(s: ManagementServer): void {
+  mgmtServer = s;
 }
 
 export async function handleHealth() {
@@ -32,16 +38,28 @@ export async function handleChatSend(params: {
     await runner.kill(params.sessionKey);
   }
 
-  await runner.spawn({
-    sessionKey: params.sessionKey,
-    model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
-    systemPrompt: process.env.SYSTEM_PROMPT || '',
-    initialPrompt: params.message,
-    onError: (data: string) => {
-      // Log stderr from claude CLI so errors aren't silently discarded
-      console.error(`[claude:${params.sessionKey}] ${data.trimEnd()}`);
-    },
-  });
+  try {
+    await runner.spawn({
+      sessionKey: params.sessionKey,
+      model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
+      systemPrompt: process.env.SYSTEM_PROMPT || '',
+      initialPrompt: params.message,
+      onError: (data: string) => {
+        // Log stderr from claude CLI so errors aren't silently discarded
+        console.error(`[claude:${params.sessionKey}] ${data.trimEnd()}`);
+      },
+    });
+  } catch (err: unknown) {
+    // Pre-flight failures (missing API key, max concurrency) surface as
+    // chat.error events so the frontend gets actionable feedback.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[chat.send:${params.sessionKey}] Spawn failed: ${message}`);
+    mgmtServer?.pushEvent('chat.error', {
+      sessionKey: params.sessionKey,
+      runId,
+      error: message,
+    });
+  }
 
   return { runId, sessionKey: params.sessionKey };
 }
