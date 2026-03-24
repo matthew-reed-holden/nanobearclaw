@@ -312,6 +312,8 @@ describe('ChildProcessRunner', () => {
   it('should throw when no Anthropic credentials are configured', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_BASE_URL;
+    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
     const runner = new ChildProcessRunner({ maxConcurrent: 2 });
     await expect(
       runner.spawn({
@@ -334,5 +336,39 @@ describe('ChildProcessRunner', () => {
     expect(session).toBeDefined();
     await runner.killAll();
     delete process.env.ANTHROPIC_BASE_URL;
+  });
+
+  it('should allow spawn when CLAUDE_CODE_OAUTH_TOKEN is set', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-ant-oat01-test-token';
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    const session = await runner.spawn({
+      sessionKey: 'oauth-test',
+      model: 'claude-sonnet-4-20250514',
+      systemPrompt: '',
+    });
+    expect(session).toBeDefined();
+    await runner.killAll();
+    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  });
+
+  it('should remap setup-token from ANTHROPIC_API_KEY to CLAUDE_CODE_OAUTH_TOKEN', async () => {
+    // Simulate user passing a setup-token via ANTHROPIC_API_KEY (wrong var)
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-oat01-setup-token-value';
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    const session = await runner.spawn({
+      sessionKey: 'remap-test',
+      model: 'claude-sonnet-4-20250514',
+      systemPrompt: '',
+    });
+    expect(session).toBeDefined();
+    // Verify the spawn call got the right env vars
+    const spawnCall = spawnMock.mock.calls[spawnMock.mock.calls.length - 1];
+    const spawnEnv = spawnCall[2]?.env as Record<string, string | undefined>;
+    expect(spawnEnv?.CLAUDE_CODE_OAUTH_TOKEN).toBe(
+      'sk-ant-oat01-setup-token-value',
+    );
+    expect(spawnEnv?.ANTHROPIC_API_KEY).toBeUndefined();
+    await runner.killAll();
   });
 });

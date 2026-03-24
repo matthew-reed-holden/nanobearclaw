@@ -1,6 +1,10 @@
 import { ChildProcessRunner } from './child-process-runner.js';
 import { ManagementServer } from './management/server.js';
-import { setRunner, setManagementServer, sessionRunIds } from './management/handlers.js';
+import {
+  setRunner,
+  setManagementServer,
+  sessionRunIds,
+} from './management/handlers.js';
 
 const MANAGEMENT_PORT = parseInt(process.env.MANAGEMENT_PORT || '18789');
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '3');

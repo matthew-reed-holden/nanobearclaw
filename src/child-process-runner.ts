@@ -87,14 +87,37 @@ export class ChildProcessRunner extends EventEmitter {
     const dotEnv = loadDotEnv(DOTENV_PATH);
     const childEnv = { ...process.env, ...dotEnv };
 
-    // Pre-flight: Claude CLI requires ANTHROPIC_API_KEY (or OAuth state in
-    // ~/.claude/) to authenticate. Without it, the CLI exits with "Not logged
-    // in · Please run /login". Fail fast with a clear message instead.
-    if (!childEnv.ANTHROPIC_API_KEY && !childEnv.ANTHROPIC_BASE_URL) {
+    // Pre-flight: Claude CLI requires credentials to authenticate. Without
+    // them it exits with "Not logged in · Please run /login". Fail fast with
+    // a clear message instead.
+    //
+    // Supported credential env vars (checked in priority order by the CLI):
+    //   ANTHROPIC_AUTH_TOKEN       — bearer token (rarely used directly)
+    //   CLAUDE_CODE_OAUTH_TOKEN    — setup-token / subscription OAuth token
+    //   ANTHROPIC_API_KEY          — standard API key (sk-ant-api03-*)
+    //   ANTHROPIC_BASE_URL         — proxy (e.g. Bifrost sidecar)
+    const hasCredentials =
+      childEnv.ANTHROPIC_API_KEY ||
+      childEnv.ANTHROPIC_BASE_URL ||
+      childEnv.CLAUDE_CODE_OAUTH_TOKEN ||
+      childEnv.ANTHROPIC_AUTH_TOKEN;
+
+    if (!hasCredentials) {
       throw new Error(
         'No Anthropic credentials configured. Call ApplyConfig with your ' +
-        'ANTHROPIC_API_KEY before sending messages.'
+          'ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN before sending messages.',
       );
+    }
+
+    // If a setup-token (sk-ant-oat*) was placed in ANTHROPIC_API_KEY by
+    // mistake, move it to CLAUDE_CODE_OAUTH_TOKEN where the CLI expects it.
+    if (
+      childEnv.ANTHROPIC_API_KEY &&
+      childEnv.ANTHROPIC_API_KEY.startsWith('sk-ant-oat') &&
+      !childEnv.CLAUDE_CODE_OAUTH_TOKEN
+    ) {
+      childEnv.CLAUDE_CODE_OAUTH_TOKEN = childEnv.ANTHROPIC_API_KEY;
+      delete childEnv.ANTHROPIC_API_KEY;
     }
 
     const proc = spawn('claude', args, {
