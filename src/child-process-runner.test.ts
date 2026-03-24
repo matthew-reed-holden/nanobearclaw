@@ -59,6 +59,7 @@ describe('ChildProcessRunner', () => {
       'claude',
       [
         '-p',
+        '--verbose',
         '--model',
         'claude-sonnet-4-20250514',
         '--output-format',
@@ -85,6 +86,7 @@ describe('ChildProcessRunner', () => {
       'claude',
       [
         '-p',
+        '--verbose',
         '--model',
         'claude-sonnet-4-20250514',
         '--output-format',
@@ -108,6 +110,7 @@ describe('ChildProcessRunner', () => {
       'claude',
       [
         '-p',
+        '--verbose',
         '--model',
         'claude-sonnet-4-20250514',
         '--output-format',

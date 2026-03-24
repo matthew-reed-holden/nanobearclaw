@@ -71,6 +71,7 @@ export class ChildProcessRunner extends EventEmitter {
 
     const args = [
       '-p', // Print/pipe mode — required for non-interactive use
+      '--verbose', // Required: stream-json needs --verbose in print mode
       '--model',
       opts.model,
       '--output-format',
@@ -90,6 +91,13 @@ export class ChildProcessRunner extends EventEmitter {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,
     });
+
+    // When initialPrompt is set, the message is passed as a positional arg
+    // and stdin isn't needed. Close it to prevent the "no stdin data" warning.
+    // When no initialPrompt, keep stdin open for sendMessage() (multi-turn).
+    if (opts.initialPrompt) {
+      proc.stdin?.end();
+    }
 
     const session: AgentSession = {
       sessionKey: opts.sessionKey,
