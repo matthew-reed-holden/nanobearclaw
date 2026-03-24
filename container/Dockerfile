@@ -60,11 +60,17 @@ RUN printf '#!/bin/bash\nset -e\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace && chmod 777 /home/node
 
+# Ensure .nanoclaw config directory exists (config bridge writes .env here)
+RUN mkdir -p /home/node/.nanoclaw
+
+# Expose management API port
+EXPOSE 18789
+
 # Switch to non-root user (required for --dangerously-skip-permissions)
 USER node
 
 # Set working directory to group workspace
 WORKDIR /workspace/group
 
-# Entry point reads JSON from stdin, outputs JSON to stdout
-ENTRYPOINT ["/app/entrypoint.sh"]
+# PaaS entrypoint: management API + child process runner
+CMD ["node", "dist/paas-entrypoint.js"]
