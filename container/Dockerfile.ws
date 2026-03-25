@@ -34,13 +34,11 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 # Install claude-code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Management server
+# Management server + channel runtime
 WORKDIR /ws
-RUN echo '{"name":"nanoclaw-ws","version":"1.0.0","type":"module"}' > package.json \
-  && npm install ws@8
-COPY dist/k8s-entrypoint.js dist/k8s-entrypoint.js.map ./dist/
-COPY dist/child-process-runner.js dist/child-process-runner.js.map ./dist/
-COPY dist/management/ ./dist/management/
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY dist/ ./dist/
 
 # Config directory for .env
 RUN mkdir -p /home/node/.nanoclaw && chown node:node /home/node/.nanoclaw
