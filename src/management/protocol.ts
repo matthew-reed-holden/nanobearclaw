@@ -46,6 +46,8 @@ export const METHODS = [
   'chat.abort',
   'sessions.list',
   'chat.history',
+  'channels.status',
+  'whatsapp.pair',
 ] as const;
 export type Method = (typeof METHODS)[number];
 
@@ -55,6 +57,8 @@ export const EVENTS = [
   'chat.error',
   'agent.tool',
   'health',
+  'channels.status',
+  'whatsapp.qr',
 ] as const;
 export type EventName = (typeof EVENTS)[number];
 

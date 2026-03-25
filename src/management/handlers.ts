@@ -1,14 +1,28 @@
 import type { AgentRunner } from './agent-runner.js';
+import type { ChannelStatusReporter } from './channel-status.js';
+import type { WhatsAppPairingRelay } from './whatsapp-relay.js';
 
 // Maps sessionKey → the runId of its most recent chat.send.
 // Exported so paas-entrypoint can tag streamed output events with the correct runId.
 export const sessionRunIds = new Map<string, string>();
 const startTime = Date.now();
 
+export interface HandlerDeps {
+  channelStatusReporter?: ChannelStatusReporter;
+  whatsAppRelay?: WhatsAppPairingRelay;
+}
+
 export function createHandlers(
   runner: AgentRunner,
   pushEvent?: (event: string, payload: Record<string, unknown>) => void,
+  deps?: HandlerDeps | ChannelStatusReporter,
 ): Record<string, (params: any) => Promise<any>> {
+  // Support legacy call-site that passes ChannelStatusReporter directly
+  const resolved: HandlerDeps =
+    deps && 'getStatus' in deps
+      ? { channelStatusReporter: deps as ChannelStatusReporter }
+      : (deps as HandlerDeps) ?? {};
+  const { channelStatusReporter, whatsAppRelay } = resolved;
   return {
     health: async () => ({
       status: 'ok' as const,
@@ -64,5 +78,19 @@ export function createHandlers(
     'sessions.list': async () => [],
 
     'chat.history': async () => [],
+
+    'channels.status': async () => {
+      if (!channelStatusReporter) {
+        return { channels: [] };
+      }
+      return channelStatusReporter.getStatus();
+    },
+
+    'whatsapp.pair': async () => {
+      if (!whatsAppRelay) {
+        throw new Error('WhatsApp pairing relay not configured');
+      }
+      return whatsAppRelay.initiatePairing();
+    },
   };
 }

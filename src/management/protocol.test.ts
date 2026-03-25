@@ -8,23 +8,27 @@ import type {
 } from './protocol.js';
 
 describe('Protocol', () => {
-  it('should define exactly 5 methods', () => {
+  it('should define exactly 7 methods', () => {
     expect(METHODS).toEqual([
       'health',
       'chat.send',
       'chat.abort',
       'sessions.list',
       'chat.history',
+      'channels.status',
+      'whatsapp.pair',
     ]);
   });
 
-  it('should define exactly 5 events', () => {
+  it('should define exactly 7 events', () => {
     expect(EVENTS).toEqual([
       'chat.delta',
       'chat.final',
       'chat.error',
       'agent.tool',
       'health',
+      'channels.status',
+      'whatsapp.qr',
     ]);
   });
 
