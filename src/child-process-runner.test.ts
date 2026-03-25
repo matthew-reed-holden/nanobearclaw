@@ -33,10 +33,17 @@ vi.mock('child_process', async () => {
 });
 
 import { ChildProcessRunner } from './child-process-runner.js';
+import type { AgentRunner } from './management/agent-runner.js';
 
 const spawnMock = vi.mocked(spawn);
 
 describe('ChildProcessRunner', () => {
+  it('should conform to AgentRunner interface', () => {
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    const asRunner: AgentRunner = runner;
+    expect(asRunner).toBeDefined();
+  });
+
   beforeEach(() => {
     fakeProc = createFakeProcess();
     // Ensure the pre-flight API key check passes in tests
@@ -95,6 +102,36 @@ describe('ChildProcessRunner', () => {
         '--output-format',
         'stream-json',
         '--dangerously-skip-permissions',
+      ],
+      expect.anything(),
+    );
+    await runner.killAll();
+  });
+
+  it('should pass --resume before system-prompt and initialPrompt', async () => {
+    const runner = new ChildProcessRunner({ maxConcurrent: 2 });
+    await runner.spawn({
+      sessionKey: 'resume-test',
+      model: 'claude-sonnet-4-20250514',
+      systemPrompt: 'You are helpful.',
+      initialPrompt: 'Continue the conversation',
+      resumeSessionId: 'sess-abc123',
+    });
+    expect(spawnMock).toHaveBeenCalledWith(
+      'claude',
+      [
+        '-p',
+        '--verbose',
+        '--model',
+        'claude-sonnet-4-20250514',
+        '--output-format',
+        'stream-json',
+        '--dangerously-skip-permissions',
+        '--resume',
+        'sess-abc123',
+        '--system-prompt',
+        'You are helpful.',
+        'Continue the conversation',
       ],
       expect.anything(),
     );

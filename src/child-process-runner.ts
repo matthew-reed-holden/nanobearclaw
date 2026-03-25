@@ -1,22 +1,21 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import { readFileSync, existsSync } from 'fs';
+import type {
+  AgentRunner,
+  SpawnOptions as ISpawnOptions,
+  AgentSession as IAgentSession,
+} from './management/agent-runner.js';
 
-export interface SpawnOptions {
-  sessionKey: string;
-  model: string;
-  systemPrompt: string;
-  initialPrompt?: string; // If set, passed as positional arg to `claude -p <message>`
+export interface SpawnOptions extends ISpawnOptions {
   onOutput?: (data: string) => void;
   onError?: (data: string) => void;
   onExit?: (code: number | null) => void;
 }
 
-export interface AgentSession {
-  sessionKey: string;
+export interface AgentSession extends IAgentSession {
   pid: number;
   process: ChildProcess;
-  startedAt: Date;
 }
 
 /**
@@ -52,7 +51,7 @@ function loadDotEnv(path: string): Record<string, string> {
 
 const DOTENV_PATH = '/home/node/.nanoclaw/.env';
 
-export class ChildProcessRunner extends EventEmitter {
+export class ChildProcessRunner extends EventEmitter implements AgentRunner {
   private sessions = new Map<string, AgentSession>();
   private maxConcurrent: number;
 
@@ -77,6 +76,7 @@ export class ChildProcessRunner extends EventEmitter {
       '--output-format',
       'stream-json',
       '--dangerously-skip-permissions', // Required — no TTY to accept permissions
+      ...(opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : []),
       ...(opts.systemPrompt ? ['--system-prompt', opts.systemPrompt] : []),
       ...(opts.initialPrompt ? [opts.initialPrompt] : []), // Positional arg: the user message
     ];
