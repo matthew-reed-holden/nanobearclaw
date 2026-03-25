@@ -18,6 +18,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
+    "start:ws": "node dist/k8s-entrypoint.js",
     "test:watch": "vitest"
   },
   "dependencies": {
