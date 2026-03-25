@@ -130,9 +130,7 @@ async function main() {
           const message = err instanceof Error ? err.message : String(err);
           console.error(`[channel:${sessionKey}] Spawn failed: ${message}`);
           // Try to send error back to channel
-          channel
-            ?.sendMessage(chatJid, `Error: ${message}`)
-            .catch(() => {});
+          channel?.sendMessage(chatJid, `Error: ${message}`).catch(() => {});
         });
 
       // Collect streamed output and send back to channel when complete
@@ -142,11 +140,25 @@ async function main() {
         channelResponseTargets.set(sessionKey, { channel, chatJid });
       }
     },
-    onChatMetadata: () => {
-      // No-op in k8s mode — metadata is not persisted locally
+    onChatMetadata: (chatJid: string) => {
+      // Auto-register chats in k8s mode so channels deliver all messages.
+      // Standalone NanoClaw requires explicit /chatid registration, but in
+      // PaaS mode every chat is implicitly registered.
+      if (!autoRegisteredGroups[chatJid]) {
+        autoRegisteredGroups[chatJid] = {
+          name: chatJid,
+          folder: chatJid,
+          trigger: '',
+          added_at: new Date().toISOString(),
+          requiresTrigger: false,
+        };
+      }
     },
-    registeredGroups: () => ({}),
+    registeredGroups: () => autoRegisteredGroups,
   };
+
+  // In PaaS mode, all chats are auto-registered so channels deliver every message.
+  const autoRegisteredGroups: Record<string, any> = {};
 
   // Track which channel to send responses back to
   const channelResponseTargets = new Map<
@@ -158,9 +170,7 @@ async function main() {
     const factory = getChannelFactory(channelName)!;
     const channel = factory(channelOpts);
     if (!channel) {
-      console.warn(
-        `Channel ${channelName}: credentials missing — skipping`,
-      );
+      console.warn(`Channel ${channelName}: credentials missing — skipping`);
       continue;
     }
     try {
