@@ -4,6 +4,7 @@ import {
   createHandlers,
   sessionRunIds,
   parseStreamJsonLine,
+  resetStreamState,
 } from './management/index.js';
 
 const MANAGEMENT_PORT = parseInt(process.env.MANAGEMENT_PORT || '18789');
@@ -25,9 +26,19 @@ async function main() {
     `NanoClaw K8s management API listening on port ${MANAGEMENT_PORT}`,
   );
 
+  // Per-session line buffer: stdout `data` events deliver arbitrary byte
+  // chunks, not complete lines. We accumulate partial lines here so that
+  // JSON objects split across chunks are reassembled before parsing.
+  const lineBuffers = new Map<string, string>();
+
   runner.on('output', (sessionKey: string, data: string) => {
     const runId = sessionRunIds.get(sessionKey) || '';
-    for (const line of data.split('\n').filter(Boolean)) {
+    const prev = lineBuffers.get(sessionKey) || '';
+    const combined = prev + data;
+    const lines = combined.split('\n');
+    // Last element is either empty (if data ended with \n) or a partial line
+    lineBuffers.set(sessionKey, lines.pop()!);
+    for (const line of lines.filter(Boolean)) {
       for (const ev of parseStreamJsonLine(line, sessionKey, runId)) {
         server.pushEvent(ev.event, ev.payload);
       }
@@ -35,6 +46,17 @@ async function main() {
   });
 
   runner.on('exit', (sessionKey: string, code: number | null) => {
+    // Flush any remaining buffered output before emitting exit events.
+    const remaining = lineBuffers.get(sessionKey) || '';
+    lineBuffers.delete(sessionKey);
+    resetStreamState(sessionKey);
+    if (remaining.trim()) {
+      const runId = sessionRunIds.get(sessionKey) || '';
+      for (const ev of parseStreamJsonLine(remaining, sessionKey, runId)) {
+        server.pushEvent(ev.event, ev.payload);
+      }
+    }
+
     const runId = sessionRunIds.get(sessionKey) || '';
     sessionRunIds.delete(sessionKey);
     if (code !== 0 && code !== null) {

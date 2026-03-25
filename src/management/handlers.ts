@@ -21,7 +21,7 @@ export function createHandlers(
   const resolved: HandlerDeps =
     deps && 'getStatus' in deps
       ? { channelStatusReporter: deps as ChannelStatusReporter }
-      : (deps as HandlerDeps) ?? {};
+      : ((deps as HandlerDeps) ?? {});
   const { channelStatusReporter, whatsAppRelay } = resolved;
   return {
     health: async () => ({

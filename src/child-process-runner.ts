@@ -75,6 +75,7 @@ export class ChildProcessRunner extends EventEmitter implements AgentRunner {
       opts.model,
       '--output-format',
       'stream-json',
+      '--include-partial-messages', // Emit stream_event with text_delta for real-time streaming
       '--dangerously-skip-permissions', // Required — no TTY to accept permissions
       ...(opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : []),
       ...(opts.systemPrompt ? ['--system-prompt', opts.systemPrompt] : []),
