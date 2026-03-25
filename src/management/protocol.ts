@@ -62,6 +62,7 @@ export type EventName = (typeof EVENTS)[number];
 export interface ChatSendParams {
   sessionKey: string;
   message: string;
+  resumeSessionId?: string; // Claude CLI session ID for --resume (multi-turn)
 }
 export interface ChatAbortParams {
   sessionKey: string;
@@ -85,6 +86,7 @@ export interface ChatFinalPayload {
   sessionKey: string;
   runId: string;
   content: string;
+  sessionId?: string; // Claude CLI session ID — caller stores this for --resume on next turn
   usage: { inputTokens: number; outputTokens: number };
 }
 export interface ChatErrorPayload {

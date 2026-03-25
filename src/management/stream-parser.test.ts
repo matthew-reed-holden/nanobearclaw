@@ -10,18 +10,36 @@ describe('parseStreamJsonLine', () => {
     });
     const events = parseStreamJsonLine(line, 'session-1', 'run-1');
     expect(events).toEqual([
-      { event: 'chat.delta', payload: { sessionKey: 'session-1', runId: 'run-1', content: 'Hello world' } },
+      {
+        event: 'chat.delta',
+        payload: {
+          sessionKey: 'session-1',
+          runId: 'run-1',
+          content: 'Hello world',
+        },
+      },
     ]);
   });
 
   it('parses tool_use block as agent.tool', () => {
     const line = JSON.stringify({
       type: 'assistant',
-      message: { content: [{ type: 'tool_use', name: 'Read', input: { path: '/foo' } }] },
+      message: {
+        content: [{ type: 'tool_use', name: 'Read', input: { path: '/foo' } }],
+      },
     });
     const events = parseStreamJsonLine(line, 's1', 'r1');
     expect(events).toEqual([
-      { event: 'agent.tool', payload: { sessionKey: 's1', runId: 'r1', tool: 'Read', input: { path: '/foo' }, output: null } },
+      {
+        event: 'agent.tool',
+        payload: {
+          sessionKey: 's1',
+          runId: 'r1',
+          tool: 'Read',
+          input: { path: '/foo' },
+          output: null,
+        },
+      },
     ]);
   });
 
@@ -37,7 +55,10 @@ describe('parseStreamJsonLine', () => {
       {
         event: 'chat.final',
         payload: {
-          sessionKey: 's1', runId: 'r1', content: 'Done!', sessionId: 'sess-abc',
+          sessionKey: 's1',
+          runId: 'r1',
+          content: 'Done!',
+          sessionId: 'sess-abc',
           usage: { inputTokens: 100, outputTokens: 50 },
         },
       },

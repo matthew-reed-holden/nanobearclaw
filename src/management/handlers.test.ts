@@ -38,12 +38,15 @@ function createMockRunner(
 describe('createHandlers', () => {
   let runner: ReturnType<typeof createMockRunner>;
   let handlers: Record<string, (params: any) => Promise<any>>;
-  let pushEvent: ReturnType<typeof vi.fn<(event: string, payload: Record<string, unknown>) => void>>;
+  let pushEvent: ReturnType<
+    typeof vi.fn<(event: string, payload: Record<string, unknown>) => void>
+  >;
 
   beforeEach(() => {
     sessionRunIds.clear();
     runner = createMockRunner();
-    pushEvent = vi.fn<(event: string, payload: Record<string, unknown>) => void>();
+    pushEvent =
+      vi.fn<(event: string, payload: Record<string, unknown>) => void>();
     handlers = createHandlers(runner, pushEvent);
   });
 

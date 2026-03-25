@@ -27,5 +27,8 @@ export interface AgentRunner {
   get activeCount(): number;
   getSession(sessionKey: string): AgentSession | undefined;
 
-  on<K extends keyof RunnerEventMap>(event: K, listener: RunnerEventMap[K]): void;
+  on<K extends keyof RunnerEventMap>(
+    event: K,
+    listener: RunnerEventMap[K],
+  ): void;
 }
