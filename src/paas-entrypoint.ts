@@ -1,19 +1,20 @@
 import { ChildProcessRunner } from './child-process-runner.js';
 import { ManagementServer } from './management/server.js';
-import {
-  setRunner,
-  setManagementServer,
-  sessionRunIds,
-} from './management/handlers.js';
+import { createHandlers, sessionRunIds } from './management/handlers.js';
 
 const MANAGEMENT_PORT = parseInt(process.env.MANAGEMENT_PORT || '18789');
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '3');
 
 async function main() {
   const runner = new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
-  const server = new ManagementServer({ port: MANAGEMENT_PORT });
-  setRunner(runner);
-  setManagementServer(server);
+  // Server and handlers reference each other: handlers need pushEvent, server
+  // needs the handler record. We solve this by creating a late-bound pushEvent
+  // that delegates to the server instance once it exists.
+  let server: ManagementServer;
+  const handlers = createHandlers(runner, (event, payload) =>
+    server.pushEvent(event, payload),
+  );
+  server = new ManagementServer({ port: MANAGEMENT_PORT, handlers });
   await server.start();
   console.log(
     `NanoClaw PaaS management API listening on port ${MANAGEMENT_PORT}`,
@@ -61,6 +62,9 @@ async function main() {
             sessionKey,
             runId,
             content: parsed.result || '',
+            // Pass Claude's session ID back so the caller can store it
+            // and supply it as resumeSessionId on the next chat.send.
+            ...(parsed.session_id ? { sessionId: parsed.session_id } : {}),
             usage: {
               inputTokens: usage?.input_tokens ?? 0,
               outputTokens: usage?.output_tokens ?? 0,
@@ -73,11 +77,13 @@ async function main() {
     }
   });
 
-  // Emit chat.error to clients when a claude process exits unexpectedly
+  // Emit chat.error to clients when a claude process exits unexpectedly.
+  // code === null means killed by signal (e.g. intentional SIGTERM from kill/abort)
+  // — don't treat that as an error.
   runner.on('exit', (sessionKey: string, code: number | null) => {
     const runId = sessionRunIds.get(sessionKey) || '';
     sessionRunIds.delete(sessionKey);
-    if (code !== 0) {
+    if (code !== 0 && code !== null) {
       server.pushEvent('chat.error', {
         sessionKey,
         runId,

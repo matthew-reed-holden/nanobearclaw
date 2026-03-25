@@ -1,17 +1,21 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import { validateToken } from './auth.js';
-import { handlers } from './handlers.js';
 import type { Frame, RequestFrame } from './protocol.js';
 
 export class ManagementServer {
   private wss: WebSocketServer | null = null;
   private httpServer: http.Server | null = null;
   private port: number;
+  private handlers: Record<string, (params: any) => Promise<any>>;
   private authenticatedClients = new Set<WebSocket>();
 
-  constructor(config: { port: number }) {
+  constructor(config: {
+    port: number;
+    handlers: Record<string, (params: any) => Promise<any>>;
+  }) {
     this.port = config.port;
+    this.handlers = config.handlers;
   }
 
   async start(): Promise<void> {
@@ -66,7 +70,7 @@ export class ManagementServer {
 
           if (frame.type === 'req') {
             const req = frame as RequestFrame;
-            const handler = handlers[req.method];
+            const handler = this.handlers[req.method];
             if (!handler) {
               ws.send(
                 JSON.stringify({

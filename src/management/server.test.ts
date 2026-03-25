@@ -1,6 +1,26 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import WebSocket from 'ws';
+import { EventEmitter } from 'events';
 import { ManagementServer } from './server.js';
+import { createHandlers } from './handlers.js';
+import type { AgentRunner } from './agent-runner.js';
+
+function createMockRunner(): AgentRunner {
+  const emitter = new EventEmitter();
+  const mock = Object.assign(emitter, {
+    spawn: async () => ({ sessionKey: 'mock', startedAt: new Date() }),
+    sendMessage: async () => {},
+    kill: async () => {},
+    killAll: async () => {},
+    getSession: () => undefined,
+    on: emitter.on.bind(emitter),
+  });
+  Object.defineProperty(mock, 'activeCount', {
+    get: () => 0,
+    enumerable: true,
+  });
+  return mock as unknown as AgentRunner;
+}
 
 describe('ManagementServer', () => {
   let server: ManagementServer;
@@ -8,7 +28,9 @@ describe('ManagementServer', () => {
 
   beforeAll(async () => {
     process.env.MANAGEMENT_TOKEN = 'test-token';
-    server = new ManagementServer({ port: PORT });
+    const runner = createMockRunner();
+    const handlers = createHandlers(runner);
+    server = new ManagementServer({ port: PORT, handlers });
     await server.start();
   });
 
