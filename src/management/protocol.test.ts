@@ -8,7 +8,7 @@ import type {
 } from './protocol.js';
 
 describe('Protocol', () => {
-  it('should define exactly 7 methods', () => {
+  it('should define exactly 9 methods', () => {
     expect(METHODS).toEqual([
       'health',
       'chat.send',
@@ -17,10 +17,12 @@ describe('Protocol', () => {
       'chat.history',
       'channels.status',
       'whatsapp.pair',
+      'groups.sync',
+      'groups.list',
     ]);
   });
 
-  it('should define exactly 7 events', () => {
+  it('should define exactly 8 events', () => {
     expect(EVENTS).toEqual([
       'chat.delta',
       'chat.final',
@@ -29,6 +31,7 @@ describe('Protocol', () => {
       'health',
       'channels.status',
       'whatsapp.qr',
+      'groups.discovered',
     ]);
   });
 

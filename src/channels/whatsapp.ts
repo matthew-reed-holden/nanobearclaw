@@ -88,7 +88,9 @@ export class WhatsAppChannel implements Channel {
         // In k8s/PaaS mode (detected by MANAGEMENT_PORT env var), don't exit —
         // the management API handles pairing via whatsapp.qr events.
         if (process.env.MANAGEMENT_PORT) {
-          logger.warn('WhatsApp QR code received — waiting for pairing via management API');
+          logger.warn(
+            'WhatsApp QR code received — waiting for pairing via management API',
+          );
           return;
         }
         const msg =

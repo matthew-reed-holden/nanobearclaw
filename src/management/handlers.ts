@@ -1,5 +1,6 @@
 import type { AgentRunner } from './agent-runner.js';
 import type { ChannelStatusReporter } from './channel-status.js';
+import type { GroupsSyncHandler } from './groups-sync.js';
 import type { WhatsAppPairingRelay } from './whatsapp-relay.js';
 
 // Maps sessionKey → the runId of its most recent chat.send.
@@ -10,6 +11,7 @@ const startTime = Date.now();
 export interface HandlerDeps {
   channelStatusReporter?: ChannelStatusReporter;
   whatsAppRelay?: WhatsAppPairingRelay;
+  groupsSyncHandler?: GroupsSyncHandler;
 }
 
 export function createHandlers(
@@ -22,7 +24,7 @@ export function createHandlers(
     deps && 'getStatus' in deps
       ? { channelStatusReporter: deps as ChannelStatusReporter }
       : ((deps as HandlerDeps) ?? {});
-  const { channelStatusReporter, whatsAppRelay } = resolved;
+  const { channelStatusReporter, whatsAppRelay, groupsSyncHandler } = resolved;
   return {
     health: async () => ({
       status: 'ok' as const,
@@ -91,6 +93,20 @@ export function createHandlers(
         throw new Error('WhatsApp pairing relay not configured');
       }
       return whatsAppRelay.initiatePairing();
+    },
+
+    'groups.sync': async (params: any) => {
+      if (!groupsSyncHandler) {
+        throw new Error('Groups sync handler not configured');
+      }
+      return groupsSyncHandler.sync(params);
+    },
+
+    'groups.list': async () => {
+      if (!groupsSyncHandler) {
+        throw new Error('Groups sync handler not configured');
+      }
+      return groupsSyncHandler.list();
     },
   };
 }

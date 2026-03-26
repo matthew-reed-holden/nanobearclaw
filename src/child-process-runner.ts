@@ -8,6 +8,7 @@ import type {
 } from './management/agent-runner.js';
 
 export interface SpawnOptions extends ISpawnOptions {
+  cwd?: string;
   onOutput?: (data: string) => void;
   onError?: (data: string) => void;
   onExit?: (code: number | null) => void;
@@ -124,6 +125,7 @@ export class ChildProcessRunner extends EventEmitter implements AgentRunner {
     const proc = spawn('claude', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,
+      ...(opts.cwd ? { cwd: opts.cwd } : {}),
     });
 
     // When initialPrompt is set, the message is passed as a positional arg

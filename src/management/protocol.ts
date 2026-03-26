@@ -48,6 +48,8 @@ export const METHODS = [
   'chat.history',
   'channels.status',
   'whatsapp.pair',
+  'groups.sync',
+  'groups.list',
 ] as const;
 export type Method = (typeof METHODS)[number];
 
@@ -59,6 +61,7 @@ export const EVENTS = [
   'health',
   'channels.status',
   'whatsapp.qr',
+  'groups.discovered',
 ] as const;
 export type EventName = (typeof EVENTS)[number];
 
