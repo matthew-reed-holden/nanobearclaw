@@ -50,6 +50,8 @@ export const METHODS = [
   'whatsapp.pair',
   'groups.sync',
   'groups.list',
+  'files.sync',
+  'files.list',
 ] as const;
 export type Method = (typeof METHODS)[number];
 
@@ -62,6 +64,7 @@ export const EVENTS = [
   'channels.status',
   'whatsapp.qr',
   'groups.discovered',
+  'memory.updated',
 ] as const;
 export type EventName = (typeof EVENTS)[number];
 
@@ -107,4 +110,45 @@ export interface AgentToolPayload {
   tool: string;
   input: unknown;
   output: unknown;
+}
+
+// --- Memory Updated Event ---
+export interface MemoryUpdatedEvent {
+  filename: string;
+  content: string;
+  checksum: string;
+  deleted: boolean;
+}
+
+// --- Files Sync Types ---
+export interface FilesSyncParams {
+  category: 'knowledge' | 'memory';
+  files: FileSyncEntry[];
+  mode: 'replace' | 'merge';
+}
+
+export interface FileSyncEntry {
+  filename: string;
+  url: string;
+  checksum: string;
+  deleted?: boolean;
+}
+
+export interface FilesSyncResult {
+  ok: boolean;
+  synced: number;
+}
+
+export interface FilesListParams {
+  category: 'knowledge' | 'memory';
+}
+
+export interface FilesListResult {
+  files: FileListEntry[];
+}
+
+export interface FileListEntry {
+  filename: string;
+  size: number;
+  checksum: string;
 }

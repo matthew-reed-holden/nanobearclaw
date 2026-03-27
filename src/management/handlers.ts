@@ -2,6 +2,8 @@ import type { AgentRunner } from './agent-runner.js';
 import type { ChannelStatusReporter } from './channel-status.js';
 import type { GroupsSyncHandler } from './groups-sync.js';
 import type { WhatsAppPairingRelay } from './whatsapp-relay.js';
+import { handleFilesSync, handleFilesList } from './files-sync.js';
+import { SHARED_RESOURCE_PROMPT } from '../shared-prompt.js';
 
 // Maps sessionKey → the runId of its most recent chat.send.
 // Exported so paas-entrypoint can tag streamed output events with the correct runId.
@@ -46,11 +48,19 @@ export function createHandlers(
         await runner.kill(params.sessionKey);
       }
 
+      // Build effective prompt: shared resources + instance-level
+      const effectivePrompt = [
+        SHARED_RESOURCE_PROMPT,
+        process.env.SYSTEM_PROMPT || '',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
       try {
         await runner.spawn({
           sessionKey: params.sessionKey,
           model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
-          systemPrompt: process.env.SYSTEM_PROMPT || '',
+          systemPrompt: effectivePrompt,
           initialPrompt: params.message,
           resumeSessionId: params.resumeSessionId,
         });
@@ -107,6 +117,14 @@ export function createHandlers(
         throw new Error('Groups sync handler not configured');
       }
       return groupsSyncHandler.list();
+    },
+
+    'files.sync': async (params: any) => {
+      return handleFilesSync(params);
+    },
+
+    'files.list': async (params: any) => {
+      return handleFilesList(params);
     },
   };
 }

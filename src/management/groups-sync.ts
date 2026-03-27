@@ -4,6 +4,16 @@ import type { RegisteredGroup } from '../types.js';
 
 const CHATS_DIR = path.resolve(process.cwd(), 'chats');
 
+/** Create a symlink to shared/ inside a workspace directory for Claude access */
+export function ensureSharedSymlink(workspaceDir: string): void {
+  const sharedLink = path.join(workspaceDir, 'shared');
+  try {
+    fs.symlinkSync('../../shared', sharedLink, 'dir');
+  } catch (err: any) {
+    if (err.code !== 'EEXIST') throw err;
+  }
+}
+
 export class GroupsSyncHandler {
   private groups = new Map<string, RegisteredGroup>();
 
@@ -27,6 +37,8 @@ export class GroupsSyncHandler {
       if (!fs.existsSync(workspaceDir)) {
         fs.mkdirSync(workspaceDir, { recursive: true });
       }
+      // Ensure shared/ symlink exists for Claude to access knowledge + memory
+      ensureSharedSymlink(workspaceDir);
 
       newGroups.set(g.chatJid, {
         name: g.name,

@@ -10,8 +10,13 @@ import {
 } from './management/index.js';
 import { ChannelStatusReporter } from './management/channel-status.js';
 import { WhatsAppPairingRelay } from './management/whatsapp-relay.js';
-import { GroupsSyncHandler } from './management/groups-sync.js';
+import {
+  GroupsSyncHandler,
+  ensureSharedSymlink,
+} from './management/groups-sync.js';
 import { DiscoveryEmitter } from './management/discovery.js';
+import { MemorySyncManager } from './management/memory-sync.js';
+import { SHARED_RESOURCE_PROMPT } from './shared-prompt.js';
 
 // Trigger channel self-registration (each module calls registerChannel())
 import './channels/index.js';
@@ -30,6 +35,22 @@ async function main() {
   if (!fs.existsSync(chatsDir)) {
     fs.mkdirSync(chatsDir, { recursive: true });
   }
+
+  // Ensure shared knowledge + memory directories exist
+  const sharedDir = path.join(process.cwd(), 'shared');
+  fs.mkdirSync(path.join(sharedDir, 'knowledge'), { recursive: true });
+  fs.mkdirSync(path.join(sharedDir, 'memory'), { recursive: true });
+
+  // Write CLAUDE.md at workspace root so Claude Code reads shared memory
+  // instructions as primary config. --system-prompt alone doesn't override
+  // Claude's built-in auto-memory (which writes to ~/.claude/projects/).
+  const rootClaudeMd = [
+    SHARED_RESOURCE_PROMPT,
+    process.env.SYSTEM_PROMPT || '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+  fs.writeFileSync(path.join(process.cwd(), 'CLAUDE.md'), rootClaudeMd, 'utf-8');
 
   const runner = new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
 
@@ -59,6 +80,9 @@ async function main() {
 
   const groupsSyncHandler = new GroupsSyncHandler();
   const discoveryEmitter = new DiscoveryEmitter(pushEvent);
+  const memorySyncManager = new MemorySyncManager({
+    memoryDir: path.join(process.cwd(), 'shared', 'memory'),
+  });
 
   const handlers = createHandlers(runner, pushEvent, {
     channelStatusReporter: statusReporter,
@@ -70,6 +94,10 @@ async function main() {
   console.log(
     `NanoClaw K8s management API listening on port ${MANAGEMENT_PORT}`,
   );
+
+  // Initialize memory sync from existing files and start periodic scanning
+  await memorySyncManager.initializeFromDisk();
+  memorySyncManager.startPeriodicScan(pushEvent);
 
   // Per-session line buffer: stdout `data` events deliver arbitrary byte
   // chunks, not complete lines. We accumulate partial lines here so that
@@ -129,6 +157,11 @@ async function main() {
       });
     }
 
+    // Scan for memory changes after each agent exit
+    memorySyncManager.scanAndUpload(pushEvent).catch((err) => {
+      console.error('Memory sync after exit failed:', err);
+    });
+
     // Send the final response back to the originating channel
     const target = channelResponseTargets.get(sessionKey);
     const response = finalResponses.get(sessionKey);
@@ -178,13 +211,25 @@ async function main() {
       if (!fs.existsSync(workspaceDir)) {
         fs.mkdirSync(workspaceDir, { recursive: true });
       }
+      // Ensure shared/ symlink exists for Claude to access knowledge + memory
+      ensureSharedSymlink(workspaceDir);
 
-      // Build effective instructions: instance-level + per-chat (append model)
+      // Build effective instructions: shared resources + instance-level + per-chat
       const instanceInstructions = process.env.SYSTEM_PROMPT || '';
       const chatInstructions = group.instructions || '';
-      const effectivePrompt = [instanceInstructions, chatInstructions]
+      const effectivePrompt = [
+        SHARED_RESOURCE_PROMPT,
+        instanceInstructions,
+        chatInstructions,
+      ]
         .filter(Boolean)
         .join('\n\n');
+
+      // Write CLAUDE.md into the workspace so Claude Code reads it as primary
+      // instructions. The --system-prompt flag alone doesn't override Claude's
+      // built-in auto-memory which writes to ~/.claude/projects/ instead of
+      // shared/memory/. CLAUDE.md is authoritative for Claude Code.
+      fs.writeFileSync(path.join(workspaceDir, 'CLAUDE.md'), effectivePrompt, 'utf-8');
 
       // Spawn a Claude process for this message
       runner
@@ -285,6 +330,7 @@ async function main() {
 
   const shutdown = async () => {
     console.log('Shutting down...');
+    memorySyncManager.stopPeriodicScan();
     statusReporter.stop();
     for (const [name, ch] of connectedChannels) {
       try {
