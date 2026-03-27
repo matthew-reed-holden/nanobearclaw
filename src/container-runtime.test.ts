@@ -62,7 +62,9 @@ describe('ensureContainerRuntimeRunning', () => {
       `${CONTAINER_RUNTIME_BIN} system status`,
       { stdio: 'pipe' },
     );
-    expect(logger.debug).toHaveBeenCalledWith('Container runtime already running');
+    expect(logger.debug).toHaveBeenCalledWith(
+      'Container runtime already running',
+    );
   });
 
   it('auto-starts when system status fails', () => {
@@ -122,7 +124,7 @@ describe('cleanupOrphans', () => {
     );
     expect(mockExecSync).toHaveBeenNthCalledWith(
       3,
-      `${CONTAINER_RUNTIME_BIN} stop nanoclaw-group3-333`,
+      `${CONTAINER_RUNTIME_BIN} stop -t 1 nanoclaw-group3-333`,
       { stdio: 'pipe' },
     );
     expect(logger.info).toHaveBeenCalledWith(

@@ -75,6 +75,20 @@ async function main() {
   // chunks, not complete lines. We accumulate partial lines here so that
   // JSON objects split across chunks are reassembled before parsing.
   const lineBuffers = new Map<string, string>();
+  const finalResponses = new Map<string, string>();
+
+  // Helper: process parsed stream events, capturing chat.final content
+  const processStreamEvents = (
+    events: ReturnType<typeof parseStreamJsonLine>,
+    sessionKey: string,
+  ) => {
+    for (const ev of events) {
+      server.pushEvent(ev.event, ev.payload);
+      if (ev.event === 'chat.final' && ev.payload.content) {
+        finalResponses.set(sessionKey, ev.payload.content as string);
+      }
+    }
+  };
 
   runner.on('output', (sessionKey: string, data: string) => {
     const runId = sessionRunIds.get(sessionKey) || '';
@@ -84,9 +98,10 @@ async function main() {
     // Last element is either empty (if data ended with \n) or a partial line
     lineBuffers.set(sessionKey, lines.pop()!);
     for (const line of lines.filter(Boolean)) {
-      for (const ev of parseStreamJsonLine(line, sessionKey, runId)) {
-        server.pushEvent(ev.event, ev.payload);
-      }
+      processStreamEvents(
+        parseStreamJsonLine(line, sessionKey, runId),
+        sessionKey,
+      );
     }
   });
 
@@ -98,9 +113,10 @@ async function main() {
     resetStreamState(sessionKey);
     if (remaining.trim()) {
       const runId = sessionRunIds.get(sessionKey) || '';
-      for (const ev of parseStreamJsonLine(remaining, sessionKey, runId)) {
-        server.pushEvent(ev.event, ev.payload);
-      }
+      processStreamEvents(
+        parseStreamJsonLine(remaining, sessionKey, runId),
+        sessionKey,
+      );
     }
 
     const runId = sessionRunIds.get(sessionKey) || '';
@@ -111,6 +127,22 @@ async function main() {
         runId,
         error: `Agent process exited with code ${code}`,
       });
+    }
+
+    // Send the final response back to the originating channel
+    const target = channelResponseTargets.get(sessionKey);
+    const response = finalResponses.get(sessionKey);
+    finalResponses.delete(sessionKey);
+    channelResponseTargets.delete(sessionKey);
+    if (target && response) {
+      target.channel
+        .sendMessage(target.chatJid, response)
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            `[channel:${sessionKey}] Failed to send response: ${message}`,
+          );
+        });
     }
   });
 
