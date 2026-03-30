@@ -13,6 +13,7 @@ import {
 } from './actions.js';
 import { getApprovalMode } from './approval-policy.js';
 import { XMonitor } from './monitor.js';
+import { buildBootstrapInterviewPrompt } from './interview.js';
 import { runMonitorCycle } from '../social-monitor/framework.js';
 import type { MonitorContext, EngagementLogEntry } from '../social-monitor/interfaces.js';
 
@@ -252,7 +253,7 @@ export function createXTools(server: any) {
 
   server.tool(
     'x_setup',
-    'Bootstrap your X persona from account history. Analyzes recent tweets and likes to generate an x-persona.md draft for review.',
+    'Bootstrap your X persona from account history. Analyzes recent tweets and likes to generate persona data, then starts an interview to refine it.',
     {},
     async () => {
       const blocked = mainOnly();
@@ -266,10 +267,11 @@ export function createXTools(server: any) {
           dryRun: false,
         };
         const draft = await monitor.bootstrapPersona!(ctx);
+        const interviewPrompt = buildBootstrapInterviewPrompt(draft.content);
         return {
           content: [{
             type: 'text' as const,
-            text: `Persona bootstrap data collected. ${draft.sourceStats.postsAnalyzed} tweets and ${draft.sourceStats.likesAnalyzed} likes analyzed (${draft.sourceStats.dateRange.from} to ${draft.sourceStats.dateRange.to}).\n\nUse the analysis below to generate the x-persona.md file and save it to /workspace/group/x-persona.md. The user should review and edit it.\n\n${draft.content}`,
+            text: `Persona bootstrap complete. ${draft.sourceStats.postsAnalyzed} tweets and ${draft.sourceStats.likesAnalyzed} likes analyzed (${draft.sourceStats.dateRange.from} to ${draft.sourceStats.dateRange.to}).\n\n${interviewPrompt}`,
           }],
         };
       } catch (err: any) {
