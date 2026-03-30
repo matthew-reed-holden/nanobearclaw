@@ -18,7 +18,7 @@ import type { MonitorContext, EngagementLogEntry } from '../social-monitor/inter
 const TASKS_DIR = '/workspace/ipc/tasks';
 const IPC_DIR = '/workspace/ipc';
 const GROUP_FOLDER = process.env.NANOCLAW_GROUP_FOLDER || '';
-const IS_MAIN = process.env.NANOCLAW_IS_MAIN === 'true';
+const IS_MAIN = process.env.NANOCLAW_IS_MAIN === '1';
 
 function writeIpcFile(dir: string, data: object): string {
   fs.mkdirSync(dir, { recursive: true });
@@ -40,6 +40,47 @@ function mainOnly(): { content: Array<{ type: 'text'; text: string }>; isError: 
   return null;
 }
 
+async function requestApproval(category: string, action: string, summary: string, details: Record<string, unknown> = {}): Promise<{ approved: boolean; respondedBy: string }> {
+  const requestId = `apr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
+
+  writeIpcFile(path.join(IPC_DIR, GROUP_FOLDER, 'tasks'), {
+    type: 'request_approval',
+    requestId,
+    category,
+    action,
+    summary,
+    details,
+    expiresAt,
+    groupFolder: GROUP_FOLDER,
+    timestamp: new Date().toISOString(),
+  });
+
+  const resultDir = path.join(IPC_DIR, GROUP_FOLDER, 'approval_results');
+  const resultFile = path.join(resultDir, `${requestId}.json`);
+  const maxWait = 3600_000;
+  const pollInterval = 2_000;
+  let elapsed = 0;
+
+  while (elapsed < maxWait) {
+    if (fs.existsSync(resultFile)) {
+      const result = JSON.parse(fs.readFileSync(resultFile, 'utf-8'));
+      fs.unlinkSync(resultFile);
+      return { approved: result.approved, respondedBy: result.respondedBy };
+    }
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+    elapsed += pollInterval;
+  }
+  return { approved: false, respondedBy: 'system:timeout' };
+}
+
+// Actions that require approval before execution
+const APPROVAL_REQUIRED: Record<string, boolean> = {
+  x_post: true,
+  x_reply: true,
+  x_quote: true,
+};
+
 export function createXTools(server: any) {
   server.tool(
     'x_post',
@@ -49,6 +90,10 @@ export function createXTools(server: any) {
       const blocked = mainOnly();
       if (blocked) return blocked;
       try {
+        const approval = await requestApproval('x_post', 'post', `Post tweet: "${args.content}"`, { content: args.content });
+        if (!approval.approved) {
+          return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+        }
         const result = await postTweet(args.content);
         return { content: [{ type: 'text' as const, text: result.url || 'Tweet posted' }] };
       } catch (err: any) {
@@ -86,6 +131,10 @@ export function createXTools(server: any) {
       if (blocked) return blocked;
       const tweetId = extractTweetId(args.tweet_url);
       try {
+        const approval = await requestApproval('x_reply', 'reply', `Reply to ${tweetId}: "${args.content}"`, { tweetId, content: args.content });
+        if (!approval.approved) {
+          return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+        }
         const result = await replyToTweet(tweetId, args.content);
         return { content: [{ type: 'text' as const, text: result.url || 'Reply posted' }] };
       } catch (err: any) {
@@ -123,6 +172,10 @@ export function createXTools(server: any) {
       if (blocked) return blocked;
       const tweetId = extractTweetId(args.tweet_url);
       try {
+        const approval = await requestApproval('x_quote', 'quote', `Quote ${tweetId}: "${args.comment}"`, { tweetId, comment: args.comment });
+        if (!approval.approved) {
+          return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+        }
         const result = await quoteTweet(tweetId, args.comment);
         return { content: [{ type: 'text' as const, text: result.url || 'Quote posted' }] };
       } catch (err: any) {

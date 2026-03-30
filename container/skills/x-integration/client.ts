@@ -9,7 +9,7 @@ export function getXClient(): Client {
 
   const accessToken = process.env.X_ACCESS_TOKEN;
   if (!accessToken) {
-    throw new Error('X_ACCESS_TOKEN environment variable not set. Ensure OneCLI proxy is configured.');
+    throw new Error('X_ACCESS_TOKEN not set. OneCLI injects this at container startup.');
   }
 
   cachedClient = new Client({ accessToken });

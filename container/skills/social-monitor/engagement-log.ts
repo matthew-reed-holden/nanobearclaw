@@ -21,7 +21,8 @@ export class EngagementLog {
         status TEXT NOT NULL,
         triggered_by TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        executed_at TEXT
+        executed_at TEXT,
+        synced_at TEXT
       )
     `);
   }
@@ -71,7 +72,32 @@ export class EngagementLog {
   }
 
   drainForSync(platform: string): EngagementLogEntry[] {
-    const entries = this.listRecent(platform);
+    const rows = this.db.prepare(`
+      SELECT * FROM engagement_log
+      WHERE platform = ? AND synced_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 100
+    `).all(platform) as Record<string, unknown>[];
+    const entries = rows.map(r => ({
+      id: r.id as string,
+      platform: r.platform as string,
+      actionType: r.action_type as string,
+      targetId: r.target_id as string,
+      targetUrl: r.target_url as string,
+      targetAuthor: r.target_author as string,
+      targetContent: r.target_content as string,
+      content: r.content as string | null,
+      approvalId: r.approval_id as string | null,
+      status: r.status as EngagementLogEntry['status'],
+      triggeredBy: r.triggered_by as EngagementLogEntry['triggeredBy'],
+      createdAt: r.created_at as string,
+      executedAt: r.executed_at as string | null,
+    }));
+    if (entries.length > 0) {
+      const ids = entries.map(e => e.id);
+      const placeholders = ids.map(() => '?').join(',');
+      this.db.prepare(`UPDATE engagement_log SET synced_at = datetime('now') WHERE id IN (${placeholders})`).run(...ids);
+    }
     return entries;
   }
 

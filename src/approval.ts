@@ -158,6 +158,18 @@ export class ApprovalStore {
     return result.changes;
   }
 
+  listRecentlyExpired(): { id: string; groupFolder: string }[] {
+    const rows = this.db.prepare(`
+      SELECT id, group_folder FROM pending_approvals
+      WHERE status = 'expired' AND responded_at IS NULL
+    `).all() as { id: string; group_folder: string }[];
+    return rows.map(r => ({ id: r.id, groupFolder: r.group_folder }));
+  }
+
+  markNotified(id: string): void {
+    this.db.prepare(`UPDATE pending_approvals SET responded_at = datetime('now') WHERE id = ?`).run(id);
+  }
+
   private rowToApproval(row: Record<string, unknown>): Approval {
     return {
       id: row.id as string,
@@ -185,21 +197,16 @@ export function startApprovalExpiryTimer(
     if (expired > 0) {
       logger.info({ count: expired }, 'Expired stale approvals');
       // Write expired results so the polling container gets unblocked
-      const db = (store as any).db as Database.Database;
-      const recentlyExpired = db.prepare(`
-        SELECT id, group_folder FROM pending_approvals
-        WHERE status = 'expired' AND responded_at IS NULL
-      `).all() as { id: string; group_folder: string }[];
+      const recentlyExpired = store.listRecentlyExpired();
 
       for (const row of recentlyExpired) {
-        writeApprovalResult(dataDir, row.group_folder, row.id, {
+        writeApprovalResult(dataDir, row.groupFolder, row.id, {
           requestId: row.id,
           approved: false,
           respondedBy: 'system:expired',
           respondedAt: new Date().toISOString(),
         });
-        // Mark as having been notified
-        db.prepare(`UPDATE pending_approvals SET responded_at = datetime('now') WHERE id = ?`).run(row.id);
+        store.markNotified(row.id);
       }
     }
   }, intervalMs);
