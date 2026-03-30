@@ -337,6 +337,71 @@ Use available_groups.json to find the JID for a group. The folder name must be c
   },
 );
 
+server.tool(
+  'request_approval',
+  'Request human approval before performing an action. Returns approved/rejected/expired status. ' +
+  'Use this before write actions that require confirmation per the approval policy.',
+  {
+    requestId: z.string().describe('Unique ID for this approval request (e.g., apr-{timestamp}-{random})'),
+    category: z.string().describe('Action category (e.g., x_post, x_reply, x_quote)'),
+    action: z.string().describe('Short action name (e.g., post, reply, quote)'),
+    summary: z.string().describe('Human-readable summary shown in approval notification'),
+    details: z.record(z.string(), z.unknown()).optional().describe('Full action payload for audit trail'),
+  },
+  async (args) => {
+    const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString(); // 1 hour default
+
+    writeIpcFile(TASKS_DIR, {
+      type: 'request_approval',
+      requestId: args.requestId,
+      category: args.category,
+      action: args.action,
+      summary: args.summary,
+      details: args.details ?? {},
+      expiresAt,
+      groupFolder,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Poll for result
+    const resultDir = path.join(IPC_DIR, 'approval_results');
+    const resultFile = path.join(resultDir, `${args.requestId}.json`);
+    const maxWait = 3600_000; // 1 hour
+    const pollInterval = 2_000;
+    let elapsed = 0;
+
+    while (elapsed < maxWait) {
+      if (fs.existsSync(resultFile)) {
+        try {
+          const result = JSON.parse(fs.readFileSync(resultFile, 'utf-8'));
+          fs.unlinkSync(resultFile);
+          return {
+            content: [{
+              type: 'text' as const,
+              text: result.approved
+                ? `Approved by ${result.respondedBy}`
+                : `Rejected by ${result.respondedBy}`,
+            }],
+            isError: !result.approved,
+          };
+        } catch (err) {
+          return {
+            content: [{ type: 'text' as const, text: `Failed to read approval result: ${err}` }],
+            isError: true,
+          };
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      elapsed += pollInterval;
+    }
+
+    return {
+      content: [{ type: 'text' as const, text: 'Approval request timed out' }],
+      isError: true,
+    };
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);
