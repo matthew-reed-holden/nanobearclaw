@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 
 interface ContainerInput {
   prompt: string;
+  systemPrompt?: string;
   sessionId?: string;
   groupFolder: string;
   chatJid: string;
@@ -435,12 +436,16 @@ async function runQuery(
   let messageCount = 0;
   let resultCount = 0;
 
-  // Load global CLAUDE.md as additional system context (shared across all groups)
+  // Build system prompt: handler-provided prompt + global CLAUDE.md (non-main groups)
   const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
-  let globalClaudeMd: string | undefined;
-  if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
-    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
+  const systemParts: string[] = [];
+  if (containerInput.systemPrompt) {
+    systemParts.push(containerInput.systemPrompt);
   }
+  if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
+    systemParts.push(fs.readFileSync(globalClaudeMdPath, 'utf-8'));
+  }
+  const combinedSystemPrompt = systemParts.length > 0 ? systemParts.join('\n\n') : undefined;
 
   // Discover additional directories mounted at /workspace/extra/*
   // These are passed to the SDK so their CLAUDE.md files are loaded automatically
@@ -465,8 +470,8 @@ async function runQuery(
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
-      systemPrompt: globalClaudeMd
-        ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
+      systemPrompt: combinedSystemPrompt
+        ? { type: 'preset' as const, preset: 'claude_code' as const, append: combinedSystemPrompt }
         : undefined,
       allowedTools: [
         'Bash',

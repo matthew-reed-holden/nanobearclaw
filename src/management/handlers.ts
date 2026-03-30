@@ -4,7 +4,10 @@ import type { GroupsSyncHandler } from './groups-sync.js';
 import type { WhatsAppPairingRelay } from './whatsapp-relay.js';
 import { handleFilesSync, handleFilesList } from './files-sync.js';
 import { handleSocialPublish } from './social-publish.js';
-import { SHARED_RESOURCE_PROMPT, X_INTEGRATION_PROMPT } from '../shared-prompt.js';
+import {
+  SHARED_RESOURCE_PROMPT,
+  X_INTEGRATION_PROMPT,
+} from '../shared-prompt.js';
 
 // Maps sessionKey → the runId of its most recent chat.send.
 // Exported so paas-entrypoint can tag streamed output events with the correct runId.

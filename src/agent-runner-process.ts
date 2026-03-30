@@ -26,6 +26,7 @@ export interface AgentSession extends IAgentSession {
 
 interface ContainerInput {
   prompt: string;
+  systemPrompt?: string;
   sessionId?: string;
   groupFolder: string;
   chatJid: string;
@@ -140,6 +141,7 @@ export class AgentRunnerProcess extends EventEmitter implements AgentRunner {
     // The agent-runner reads this on startup to configure the session.
     const containerInput: ContainerInput = {
       prompt: opts.initialPrompt || '',
+      systemPrompt: opts.systemPrompt || undefined,
       sessionId: opts.resumeSessionId,
       groupFolder: opts.groupFolder || opts.sessionKey,
       chatJid: opts.sessionKey,
