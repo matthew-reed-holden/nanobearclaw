@@ -11,3 +11,5 @@ export { validateToken } from './auth.js';
 export { parseStreamJsonLine, resetStreamState } from './stream-parser.js';
 export type { StreamEvent } from './stream-parser.js';
 export * from './protocol.js';
+export { AgentRunnerParser } from './agent-runner-parser.js';
+export type { ContainerOutput, ParseResult } from './agent-runner-parser.js';
