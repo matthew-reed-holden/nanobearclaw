@@ -55,7 +55,7 @@ export function createHandlers(
       // Build effective prompt: shared resources + integrations + instance-level
       const effectivePrompt = [
         SHARED_RESOURCE_PROMPT,
-        process.env.X_ACCESS_TOKEN ? X_INTEGRATION_PROMPT : '',
+        X_INTEGRATION_PROMPT,
         process.env.SYSTEM_PROMPT || '',
       ]
         .filter(Boolean)
@@ -149,7 +149,7 @@ export function createHandlers(
 
       const systemParts = [
         SHARED_RESOURCE_PROMPT,
-        process.env.X_ACCESS_TOKEN ? X_INTEGRATION_PROMPT : '',
+        X_INTEGRATION_PROMPT,
         params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
         params.ragContext ? `## Knowledge Context\n\n${params.ragContext}` : '',
         process.env.SYSTEM_PROMPT || '',
@@ -209,7 +209,7 @@ export function createHandlers(
 
       const systemParts = [
         SHARED_RESOURCE_PROMPT,
-        process.env.X_ACCESS_TOKEN ? X_INTEGRATION_PROMPT : '',
+        X_INTEGRATION_PROMPT,
         params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
         process.env.SYSTEM_PROMPT || '',
         `You are monitoring ${params.platform} engagement. Scan the timeline, evaluate items against the criteria below, and engage per the approval policy in /workspace/group/approval-policy.json.`,

@@ -16,7 +16,10 @@ import {
 } from './management/groups-sync.js';
 import { DiscoveryEmitter } from './management/discovery.js';
 import { MemorySyncManager } from './management/memory-sync.js';
-import { SHARED_RESOURCE_PROMPT } from './shared-prompt.js';
+import {
+  SHARED_RESOURCE_PROMPT,
+  X_INTEGRATION_PROMPT,
+} from './shared-prompt.js';
 import { AgentRunnerProcess } from './agent-runner-process.js';
 import { AgentRunnerParser } from './management/agent-runner-parser.js';
 
@@ -47,7 +50,11 @@ async function main() {
   // Write CLAUDE.md at workspace root so Claude Code reads shared memory
   // instructions as primary config. --system-prompt alone doesn't override
   // Claude's built-in auto-memory (which writes to ~/.claude/projects/).
-  const rootClaudeMd = [SHARED_RESOURCE_PROMPT, process.env.SYSTEM_PROMPT || '']
+  const rootClaudeMd = [
+    SHARED_RESOURCE_PROMPT,
+    X_INTEGRATION_PROMPT,
+    process.env.SYSTEM_PROMPT || '',
+  ]
     .filter(Boolean)
     .join('\n\n');
   fs.writeFileSync(
@@ -267,6 +274,7 @@ async function main() {
       const chatInstructions = group.instructions || '';
       const effectivePrompt = [
         SHARED_RESOURCE_PROMPT,
+        X_INTEGRATION_PROMPT,
         instanceInstructions,
         chatInstructions,
       ]
