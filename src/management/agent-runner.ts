@@ -6,6 +6,7 @@ export interface SpawnOptions {
   systemPrompt: string;
   initialPrompt?: string;
   resumeSessionId?: string;
+  isMain?: boolean;
 }
 
 export interface AgentSession {

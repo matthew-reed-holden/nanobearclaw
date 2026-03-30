@@ -68,6 +68,7 @@ export function createHandlers(
           systemPrompt: effectivePrompt,
           initialPrompt: params.message,
           resumeSessionId: params.resumeSessionId,
+          isMain: true,
         });
       } catch (err: unknown) {
         // Pre-flight failures (missing API key, max concurrency) surface as
@@ -167,6 +168,7 @@ export function createHandlers(
           model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
           systemPrompt: systemParts,
           initialPrompt: params.prompt,
+          isMain: true,
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -223,6 +225,7 @@ export function createHandlers(
           model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
           systemPrompt: systemParts,
           initialPrompt: params.prompt,
+          isMain: true,
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
