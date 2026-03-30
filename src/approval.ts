@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import Database from 'better-sqlite3';
 import { logger } from './logger.js';
 
@@ -36,6 +37,20 @@ export function getActionMode(
   action: string,
 ): 'auto' | 'confirm' | 'block' {
   return policy.actions[action]?.mode ?? policy.defaults.mode;
+}
+
+export function writeApprovalResult(
+  dataDir: string,
+  sourceGroup: string,
+  requestId: string,
+  result: { requestId: string; approved: boolean; respondedBy: string; respondedAt: string },
+): void {
+  const resultsDir = path.join(dataDir, 'ipc', sourceGroup, 'approval_results');
+  fs.mkdirSync(resultsDir, { recursive: true });
+  const filePath = path.join(resultsDir, `${requestId}.json`);
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(result));
+  fs.renameSync(tempPath, filePath);
 }
 
 export interface ApprovalRequest {

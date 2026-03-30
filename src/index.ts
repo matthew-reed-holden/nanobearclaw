@@ -40,6 +40,7 @@ import {
   getNewMessages,
   getRouterState,
   initDatabase,
+  getDb,
   setRegisteredGroup,
   setRouterState,
   setSession,
@@ -49,6 +50,7 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
+import { ApprovalStore } from './approval.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
 import { ChannelType } from './text-styles.js';
 import {
@@ -794,6 +796,18 @@ async function main(): Promise<void> {
       }));
       for (const group of Object.values(registeredGroups)) {
         writeTasksSnapshot(group.folder, group.isMain === true, taskRows);
+      }
+    },
+    approvalStore: new ApprovalStore(getDb()),
+    sendToGroup: async (groupFolder: string, text: string) => {
+      for (const [jid, group] of Object.entries(registeredGroups)) {
+        if (group.folder === groupFolder) {
+          const channel = findChannel(channels, jid);
+          if (channel) {
+            const formatted = formatOutbound(text, channel.name as ChannelType);
+            if (formatted) await channel.sendMessage(jid, formatted);
+          }
+        }
       }
     },
   });
