@@ -17,6 +17,8 @@ import {
 import { DiscoveryEmitter } from './management/discovery.js';
 import { MemorySyncManager } from './management/memory-sync.js';
 import { SHARED_RESOURCE_PROMPT } from './shared-prompt.js';
+import { AgentRunnerProcess } from './agent-runner-process.js';
+import { AgentRunnerParser } from './management/agent-runner-parser.js';
 
 // Trigger channel self-registration (each module calls registerChannel())
 import './channels/index.js';
@@ -28,6 +30,7 @@ import type { Channel, NewMessage } from './types.js';
 
 const MANAGEMENT_PORT = parseInt(process.env.MANAGEMENT_PORT || '18789');
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '3');
+const AGENT_MODE = process.env.AGENT_MODE || 'cli';
 
 async function main() {
   // Ensure top-level chats/ workspace directory exists
@@ -44,15 +47,19 @@ async function main() {
   // Write CLAUDE.md at workspace root so Claude Code reads shared memory
   // instructions as primary config. --system-prompt alone doesn't override
   // Claude's built-in auto-memory (which writes to ~/.claude/projects/).
-  const rootClaudeMd = [
-    SHARED_RESOURCE_PROMPT,
-    process.env.SYSTEM_PROMPT || '',
-  ]
+  const rootClaudeMd = [SHARED_RESOURCE_PROMPT, process.env.SYSTEM_PROMPT || '']
     .filter(Boolean)
     .join('\n\n');
-  fs.writeFileSync(path.join(process.cwd(), 'CLAUDE.md'), rootClaudeMd, 'utf-8');
+  fs.writeFileSync(
+    path.join(process.cwd(), 'CLAUDE.md'),
+    rootClaudeMd,
+    'utf-8',
+  );
 
-  const runner = new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
+  const runner = AGENT_MODE === 'sdk'
+    ? new AgentRunnerProcess({ maxConcurrent: MAX_CONCURRENT })
+    : new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
+  console.log(`Agent mode: ${AGENT_MODE}`);
 
   // --- Channel initialization ---
   // Channels deliver inbound messages via onMessage. In k8s mode we route
@@ -105,6 +112,9 @@ async function main() {
   const lineBuffers = new Map<string, string>();
   const finalResponses = new Map<string, string>();
 
+  // Per-session agent-runner parsers (SDK mode only)
+  const agentRunnerParsers = new Map<string, AgentRunnerParser>();
+
   // Helper: process parsed stream events, capturing chat.final content
   const processStreamEvents = (
     events: ReturnType<typeof parseStreamJsonLine>,
@@ -123,13 +133,36 @@ async function main() {
     const prev = lineBuffers.get(sessionKey) || '';
     const combined = prev + data;
     const lines = combined.split('\n');
-    // Last element is either empty (if data ended with \n) or a partial line
     lineBuffers.set(sessionKey, lines.pop()!);
-    for (const line of lines.filter(Boolean)) {
-      processStreamEvents(
-        parseStreamJsonLine(line, sessionKey, runId),
-        sessionKey,
-      );
+
+    if (AGENT_MODE === 'sdk') {
+      // Agent-runner marker-based protocol
+      let parser = agentRunnerParsers.get(sessionKey);
+      if (!parser) {
+        parser = new AgentRunnerParser(sessionKey, runId);
+        agentRunnerParsers.set(sessionKey, parser);
+      }
+      for (const line of lines.filter(Boolean)) {
+        const result = parser.parseLine(line);
+        for (const ev of result.events) {
+          server.pushEvent(ev.event, ev.payload);
+          if (ev.event === 'chat.final' && ev.payload.content) {
+            finalResponses.set(sessionKey, ev.payload.content as string);
+          }
+        }
+        // Track newSessionId from ContainerOutput
+        if (result.output?.newSessionId) {
+          sessionRunIds.set(sessionKey, runId); // keep runId stable
+        }
+      }
+    } else {
+      // Claude CLI stream-json protocol
+      for (const line of lines.filter(Boolean)) {
+        processStreamEvents(
+          parseStreamJsonLine(line, sessionKey, runId),
+          sessionKey,
+        );
+      }
     }
   });
 
@@ -139,12 +172,24 @@ async function main() {
     const remaining = lineBuffers.get(sessionKey) || '';
     lineBuffers.delete(sessionKey);
     resetStreamState(sessionKey);
+    agentRunnerParsers.delete(sessionKey);
     if (remaining.trim()) {
       const runId = sessionRunIds.get(sessionKey) || '';
-      processStreamEvents(
-        parseStreamJsonLine(remaining, sessionKey, runId),
-        sessionKey,
-      );
+      if (AGENT_MODE === 'sdk') {
+        const parser = agentRunnerParsers.get(sessionKey) || new AgentRunnerParser(sessionKey, runId);
+        const result = parser.parseLine(remaining);
+        for (const ev of result.events) {
+          server.pushEvent(ev.event, ev.payload);
+          if (ev.event === 'chat.final' && ev.payload.content) {
+            finalResponses.set(sessionKey, ev.payload.content as string);
+          }
+        }
+      } else {
+        processStreamEvents(
+          parseStreamJsonLine(remaining, sessionKey, runId),
+          sessionKey,
+        );
+      }
     }
 
     const runId = sessionRunIds.get(sessionKey) || '';
@@ -229,7 +274,11 @@ async function main() {
       // instructions. The --system-prompt flag alone doesn't override Claude's
       // built-in auto-memory which writes to ~/.claude/projects/ instead of
       // shared/memory/. CLAUDE.md is authoritative for Claude Code.
-      fs.writeFileSync(path.join(workspaceDir, 'CLAUDE.md'), effectivePrompt, 'utf-8');
+      fs.writeFileSync(
+        path.join(workspaceDir, 'CLAUDE.md'),
+        effectivePrompt,
+        'utf-8',
+      );
 
       // Spawn a Claude process for this message
       runner
@@ -239,7 +288,13 @@ async function main() {
           systemPrompt: effectivePrompt,
           initialPrompt: msg.content,
           cwd: workspaceDir,
-        })
+          // Extra fields for AgentRunnerProcess (ignored by ChildProcessRunner)
+          ...(AGENT_MODE === 'sdk' ? {
+            groupFolder: group.folder,
+            isMain: group.isMain || false,
+            assistantName: group.name,
+          } : {}),
+        } as any)
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
           console.error(`[channel:${sessionKey}] Spawn failed: ${message}`);
