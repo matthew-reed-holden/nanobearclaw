@@ -4,11 +4,13 @@ import {
   _initTestDatabase,
   createTask,
   getAllTasks,
+  getDb,
   getRegisteredGroup,
   getTaskById,
   setRegisteredGroup,
 } from './db.js';
 import { processTaskIpc, IpcDeps } from './ipc.js';
+import { ApprovalStore } from './approval.js';
 import { RegisteredGroup } from './types.js';
 
 // Set up registered groups used across tests
@@ -63,6 +65,8 @@ beforeEach(() => {
     getAvailableGroups: () => [],
     writeGroupsSnapshot: () => {},
     onTasksChanged: () => {},
+    approvalStore: new ApprovalStore(getDb()),
+    sendToGroup: async () => {},
   };
 });
 

@@ -159,6 +159,11 @@ export function initDatabase(): void {
   migrateJsonState();
 }
 
+/** Returns the shared database instance. Must be called after initDatabase(). */
+export function getDb(): Database.Database {
+  return db;
+}
+
 /** @internal - for tests only. Creates a fresh in-memory database. */
 export function _initTestDatabase(): void {
   db = new Database(':memory:');

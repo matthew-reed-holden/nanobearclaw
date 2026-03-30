@@ -9,6 +9,7 @@ import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
+import { ApprovalStore, loadApprovalPolicy, getActionMode, writeApprovalResult } from './approval.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
@@ -23,6 +24,8 @@ export interface IpcDeps {
     registeredJids: Set<string>,
   ) => void;
   onTasksChanged: () => void;
+  approvalStore: ApprovalStore;
+  sendToGroup: (groupFolder: string, text: string) => Promise<void>;
 }
 
 let ipcWatcherRunning = false;
@@ -173,6 +176,13 @@ export async function processTaskIpc(
     trigger?: string;
     requiresTrigger?: boolean;
     containerConfig?: RegisteredGroup['containerConfig'];
+    // For request_approval
+    requestId?: string;
+    category?: string;
+    action?: string;
+    summary?: string;
+    details?: Record<string, unknown>;
+    expiresAt?: string;
   },
   sourceGroup: string, // Verified identity from IPC directory
   isMain: boolean, // Verified from directory path
@@ -461,6 +471,67 @@ export async function processTaskIpc(
         );
       }
       break;
+
+    case 'request_approval': {
+      const { requestId, category, action, summary, details, expiresAt } = data as Record<string, unknown>;
+      if (!requestId || !category || !action || !summary) {
+        logger.warn({ type: data.type }, 'request_approval missing required fields');
+        break;
+      }
+
+      const policyPath = path.join(DATA_DIR, '..', 'groups', sourceGroup, 'approval-policy.json');
+      const policy = loadApprovalPolicy(policyPath);
+      const mode = getActionMode(policy, category as string);
+
+      if (mode === 'auto') {
+        writeApprovalResult(DATA_DIR, sourceGroup, requestId as string, {
+          requestId: requestId as string,
+          approved: true,
+          respondedBy: 'auto',
+          respondedAt: new Date().toISOString(),
+        });
+        logger.info({ requestId, category }, 'Approval auto-approved by policy');
+        break;
+      }
+
+      if (mode === 'block') {
+        writeApprovalResult(DATA_DIR, sourceGroup, requestId as string, {
+          requestId: requestId as string,
+          approved: false,
+          respondedBy: 'policy:block',
+          respondedAt: new Date().toISOString(),
+        });
+        logger.info({ requestId, category }, 'Approval blocked by policy');
+        break;
+      }
+
+      // mode === 'confirm'
+      const expiryMinutes = policy.expiryMinutes ?? 60;
+      const expiresAtDate = (expiresAt as string) || new Date(Date.now() + expiryMinutes * 60_000).toISOString();
+
+      deps.approvalStore.create({
+        id: requestId as string,
+        category: category as string,
+        action: action as string,
+        summary: summary as string,
+        details: (details as Record<string, unknown>) ?? {},
+        groupFolder: sourceGroup,
+        expiresAt: expiresAtDate,
+      });
+
+      // Notify configured channels
+      const notifyText = `Approval needed: ${summary}\nReply YES or NO (expires in ${expiryMinutes}m)\n[ID: ${requestId}]`;
+      for (const _channelName of policy.notifyChannels) {
+        try {
+          await deps.sendToGroup(sourceGroup, notifyText);
+        } catch (err) {
+          logger.error({ err, requestId }, 'Failed to send approval notification');
+        }
+      }
+
+      logger.info({ requestId, category, expiresAt: expiresAtDate }, 'Approval pending confirmation');
+      break;
+    }
 
     default:
       logger.warn({ type: data.type }, 'Unknown IPC task type');
