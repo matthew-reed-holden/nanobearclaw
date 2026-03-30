@@ -11,6 +11,7 @@ import {
   searchRecent,
   getHomeTimeline,
 } from './actions.js';
+import { getApprovalMode } from './approval-policy.js';
 import { XMonitor } from './monitor.js';
 import { runMonitorCycle } from '../social-monitor/framework.js';
 import type { MonitorContext, EngagementLogEntry } from '../social-monitor/interfaces.js';
@@ -18,6 +19,7 @@ import type { MonitorContext, EngagementLogEntry } from '../social-monitor/inter
 const TASKS_DIR = '/workspace/ipc/tasks';
 const IPC_DIR = '/workspace/ipc';
 const GROUP_FOLDER = process.env.NANOCLAW_GROUP_FOLDER || '';
+const APPROVAL_POLICY_PATH = '/workspace/group/approval-policy.json';
 const IS_MAIN = process.env.NANOCLAW_IS_MAIN === '1';
 
 function writeIpcFile(dir: string, data: object): string {
@@ -74,13 +76,6 @@ async function requestApproval(category: string, action: string, summary: string
   return { approved: false, respondedBy: 'system:timeout' };
 }
 
-// Actions that require approval before execution
-const APPROVAL_REQUIRED: Record<string, boolean> = {
-  x_post: true,
-  x_reply: true,
-  x_quote: true,
-};
-
 export function createXTools(server: any) {
   server.tool(
     'x_post',
@@ -90,9 +85,15 @@ export function createXTools(server: any) {
       const blocked = mainOnly();
       if (blocked) return blocked;
       try {
-        const approval = await requestApproval('x_post', 'post', `Post tweet: "${args.content}"`, { content: args.content });
-        if (!approval.approved) {
-          return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+        const mode = getApprovalMode(APPROVAL_POLICY_PATH, 'x_post');
+        if (mode === 'block') {
+          return { content: [{ type: 'text' as const, text: 'x_post is blocked by approval policy.' }], isError: true };
+        }
+        if (mode === 'confirm') {
+          const approval = await requestApproval('x_post', 'post', `Post tweet: "${args.content}"`, { content: args.content });
+          if (!approval.approved) {
+            return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+          }
         }
         const result = await postTweet(args.content);
         return { content: [{ type: 'text' as const, text: result.url || 'Tweet posted' }] };
@@ -110,7 +111,17 @@ export function createXTools(server: any) {
       const blocked = mainOnly();
       if (blocked) return blocked;
       const tweetId = extractTweetId(args.tweet_url);
+      const mode = getApprovalMode(APPROVAL_POLICY_PATH, 'x_like');
+      if (mode === 'block') {
+        return { content: [{ type: 'text' as const, text: 'x_like is blocked by approval policy.' }], isError: true };
+      }
       try {
+        if (mode === 'confirm') {
+          const approval = await requestApproval('x_like', 'like', `Like tweet ${tweetId}`, { tweetId });
+          if (!approval.approved) {
+            return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+          }
+        }
         await likeTweet(tweetId);
         return { content: [{ type: 'text' as const, text: `Liked tweet ${tweetId}` }] };
       } catch (err: any) {
@@ -131,9 +142,15 @@ export function createXTools(server: any) {
       if (blocked) return blocked;
       const tweetId = extractTweetId(args.tweet_url);
       try {
-        const approval = await requestApproval('x_reply', 'reply', `Reply to ${tweetId}: "${args.content}"`, { tweetId, content: args.content });
-        if (!approval.approved) {
-          return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+        const mode = getApprovalMode(APPROVAL_POLICY_PATH, 'x_reply');
+        if (mode === 'block') {
+          return { content: [{ type: 'text' as const, text: 'x_reply is blocked by approval policy.' }], isError: true };
+        }
+        if (mode === 'confirm') {
+          const approval = await requestApproval('x_reply', 'reply', `Reply to ${tweetId}: "${args.content}"`, { tweetId, content: args.content });
+          if (!approval.approved) {
+            return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+          }
         }
         const result = await replyToTweet(tweetId, args.content);
         return { content: [{ type: 'text' as const, text: result.url || 'Reply posted' }] };
@@ -151,7 +168,17 @@ export function createXTools(server: any) {
       const blocked = mainOnly();
       if (blocked) return blocked;
       const tweetId = extractTweetId(args.tweet_url);
+      const mode = getApprovalMode(APPROVAL_POLICY_PATH, 'x_retweet');
+      if (mode === 'block') {
+        return { content: [{ type: 'text' as const, text: 'x_retweet is blocked by approval policy.' }], isError: true };
+      }
       try {
+        if (mode === 'confirm') {
+          const approval = await requestApproval('x_retweet', 'retweet', `Retweet ${tweetId}`, { tweetId });
+          if (!approval.approved) {
+            return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+          }
+        }
         await retweet(tweetId);
         return { content: [{ type: 'text' as const, text: `Retweeted ${tweetId}` }] };
       } catch (err: any) {
@@ -172,9 +199,15 @@ export function createXTools(server: any) {
       if (blocked) return blocked;
       const tweetId = extractTweetId(args.tweet_url);
       try {
-        const approval = await requestApproval('x_quote', 'quote', `Quote ${tweetId}: "${args.comment}"`, { tweetId, comment: args.comment });
-        if (!approval.approved) {
-          return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+        const mode = getApprovalMode(APPROVAL_POLICY_PATH, 'x_quote');
+        if (mode === 'block') {
+          return { content: [{ type: 'text' as const, text: 'x_quote is blocked by approval policy.' }], isError: true };
+        }
+        if (mode === 'confirm') {
+          const approval = await requestApproval('x_quote', 'quote', `Quote ${tweetId}: "${args.comment}"`, { tweetId, comment: args.comment });
+          if (!approval.approved) {
+            return { content: [{ type: 'text' as const, text: `Approval denied by ${approval.respondedBy}` }], isError: true };
+          }
         }
         const result = await quoteTweet(tweetId, args.comment);
         return { content: [{ type: 'text' as const, text: result.url || 'Quote posted' }] };
