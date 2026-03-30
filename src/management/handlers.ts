@@ -4,7 +4,7 @@ import type { GroupsSyncHandler } from './groups-sync.js';
 import type { WhatsAppPairingRelay } from './whatsapp-relay.js';
 import { handleFilesSync, handleFilesList } from './files-sync.js';
 import { handleSocialPublish } from './social-publish.js';
-import { SHARED_RESOURCE_PROMPT } from '../shared-prompt.js';
+import { SHARED_RESOURCE_PROMPT, X_INTEGRATION_PROMPT } from '../shared-prompt.js';
 
 // Maps sessionKey → the runId of its most recent chat.send.
 // Exported so paas-entrypoint can tag streamed output events with the correct runId.
@@ -49,9 +49,10 @@ export function createHandlers(
         await runner.kill(params.sessionKey);
       }
 
-      // Build effective prompt: shared resources + instance-level
+      // Build effective prompt: shared resources + integrations + instance-level
       const effectivePrompt = [
         SHARED_RESOURCE_PROMPT,
+        process.env.X_ACCESS_TOKEN ? X_INTEGRATION_PROMPT : '',
         process.env.SYSTEM_PROMPT || '',
       ]
         .filter(Boolean)
@@ -145,6 +146,7 @@ export function createHandlers(
 
       const systemParts = [
         SHARED_RESOURCE_PROMPT,
+        process.env.X_ACCESS_TOKEN ? X_INTEGRATION_PROMPT : '',
         params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
         params.ragContext ? `## Knowledge Context\n\n${params.ragContext}` : '',
         process.env.SYSTEM_PROMPT || '',
@@ -204,6 +206,7 @@ export function createHandlers(
 
       const systemParts = [
         SHARED_RESOURCE_PROMPT,
+        process.env.X_ACCESS_TOKEN ? X_INTEGRATION_PROMPT : '',
         params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
         process.env.SYSTEM_PROMPT || '',
         `You are monitoring ${params.platform} engagement. Scan the timeline, evaluate items against the criteria below, and engage per the approval policy in /workspace/group/approval-policy.json.`,
