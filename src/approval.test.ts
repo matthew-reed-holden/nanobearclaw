@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { ApprovalStore, loadApprovalPolicy, getActionMode } from './approval.js';
+import {
+  ApprovalStore,
+  loadApprovalPolicy,
+  getActionMode,
+} from './approval.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -107,13 +111,21 @@ describe('ApprovalStore', () => {
 
   it('lists pending approvals for a group', () => {
     store.create({
-      id: 'apr-006', category: 'x_post', action: 'post', summary: 'A',
-      details: {}, groupFolder: 'main',
+      id: 'apr-006',
+      category: 'x_post',
+      action: 'post',
+      summary: 'A',
+      details: {},
+      groupFolder: 'main',
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
     store.create({
-      id: 'apr-007', category: 'x_like', action: 'like', summary: 'B',
-      details: {}, groupFolder: 'other',
+      id: 'apr-007',
+      category: 'x_like',
+      action: 'like',
+      summary: 'B',
+      details: {},
+      groupFolder: 'other',
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
@@ -139,15 +151,18 @@ describe('ApprovalPolicy', () => {
 
   it('loads policy from JSON file', () => {
     const policyPath = path.join(tmpDir, 'approval-policy.json');
-    fs.writeFileSync(policyPath, JSON.stringify({
-      defaults: { mode: 'confirm' },
-      actions: {
-        x_like: { mode: 'auto' },
-        x_post: { mode: 'confirm' },
-      },
-      notifyChannels: ['whatsapp'],
-      expiryMinutes: 30,
-    }));
+    fs.writeFileSync(
+      policyPath,
+      JSON.stringify({
+        defaults: { mode: 'confirm' },
+        actions: {
+          x_like: { mode: 'auto' },
+          x_post: { mode: 'confirm' },
+        },
+        notifyChannels: ['whatsapp'],
+        expiryMinutes: 30,
+      }),
+    );
 
     const policy = loadApprovalPolicy(policyPath);
     expect(policy.defaults.mode).toBe('confirm');
@@ -167,12 +182,15 @@ describe('ApprovalPolicy', () => {
     expect(getActionMode(policy, 'x_post')).toBe('confirm');
 
     const policyPath = path.join(tmpDir, 'approval-policy.json');
-    fs.writeFileSync(policyPath, JSON.stringify({
-      defaults: { mode: 'confirm' },
-      actions: { x_like: { mode: 'auto' } },
-      notifyChannels: [],
-      expiryMinutes: 60,
-    }));
+    fs.writeFileSync(
+      policyPath,
+      JSON.stringify({
+        defaults: { mode: 'confirm' },
+        actions: { x_like: { mode: 'auto' } },
+        notifyChannels: [],
+        expiryMinutes: 60,
+      }),
+    );
 
     const loaded = loadApprovalPolicy(policyPath);
     expect(getActionMode(loaded, 'x_like')).toBe('auto');

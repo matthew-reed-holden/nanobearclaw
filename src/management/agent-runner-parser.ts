@@ -18,7 +18,11 @@ export interface ParseResult {
   output?: ContainerOutput;
 }
 
-type ParserState = 'idle' | 'awaiting_stream_json' | 'awaiting_output_json' | 'awaiting_output_end';
+type ParserState =
+  | 'idle'
+  | 'awaiting_stream_json'
+  | 'awaiting_output_json'
+  | 'awaiting_output_end';
 
 export class AgentRunnerParser {
   private state: ParserState = 'idle';
@@ -53,8 +57,15 @@ export class AgentRunnerParser {
     if (this.state === 'awaiting_stream_json') {
       this.state = 'idle';
       try {
-        const parsed = JSON.parse(line) as { event: string; payload: Record<string, unknown> };
-        const payload = { sessionKey: this.sessionKey, runId: this.runId, ...parsed.payload };
+        const parsed = JSON.parse(line) as {
+          event: string;
+          payload: Record<string, unknown>;
+        };
+        const payload = {
+          sessionKey: this.sessionKey,
+          runId: this.runId,
+          ...parsed.payload,
+        };
         events.push({ event: parsed.event, payload });
       } catch {
         // Malformed JSON — skip silently
@@ -70,7 +81,11 @@ export class AgentRunnerParser {
         if (output.status === 'error' && output.error) {
           events.push({
             event: 'chat.error',
-            payload: { sessionKey: this.sessionKey, runId: this.runId, error: output.error },
+            payload: {
+              sessionKey: this.sessionKey,
+              runId: this.runId,
+              error: output.error,
+            },
           });
         } else if (output.status === 'success' && output.result) {
           events.push({
@@ -79,7 +94,9 @@ export class AgentRunnerParser {
               sessionKey: this.sessionKey,
               runId: this.runId,
               content: output.result,
-              ...(output.newSessionId ? { sessionId: output.newSessionId } : {}),
+              ...(output.newSessionId
+                ? { sessionId: output.newSessionId }
+                : {}),
               usage: { inputTokens: 0, outputTokens: 0 },
             },
           });

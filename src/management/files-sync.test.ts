@@ -55,9 +55,7 @@ describe('handleFilesSync', () => {
     await fs.writeFile(path.join(dir, 'stale.txt'), 'old content');
 
     const newContent = Buffer.from('hello world');
-    fetchMock.mockResolvedValueOnce(
-      new Response(newContent, { status: 200 }),
-    );
+    fetchMock.mockResolvedValueOnce(new Response(newContent, { status: 200 }));
 
     const result = await handleFilesSync({
       category: 'knowledge',
@@ -80,9 +78,7 @@ describe('handleFilesSync', () => {
     expect(written.toString()).toBe('hello world');
 
     // stale.txt should be gone
-    await expect(
-      fs.access(path.join(dir, 'stale.txt')),
-    ).rejects.toThrow();
+    await expect(fs.access(path.join(dir, 'stale.txt'))).rejects.toThrow();
   });
 
   it('merge mode — downloads files, leaves extras', async () => {
@@ -91,9 +87,7 @@ describe('handleFilesSync', () => {
     await fs.writeFile(path.join(dir, 'existing.txt'), 'keep me');
 
     const newContent = Buffer.from('new file');
-    fetchMock.mockResolvedValueOnce(
-      new Response(newContent, { status: 200 }),
-    );
+    fetchMock.mockResolvedValueOnce(new Response(newContent, { status: 200 }));
 
     const result = await handleFilesSync({
       category: 'knowledge',
@@ -137,9 +131,7 @@ describe('handleFilesSync', () => {
 
     expect(result.ok).toBe(true);
     expect(result.synced).toBe(1);
-    await expect(
-      fs.access(path.join(dir, 'remove-me.txt')),
-    ).rejects.toThrow();
+    await expect(fs.access(path.join(dir, 'remove-me.txt'))).rejects.toThrow();
   });
 
   it('skips file with matching checksum', async () => {
@@ -176,7 +168,11 @@ describe('handleFilesSync', () => {
       category: 'knowledge',
       mode: 'merge',
       files: [
-        { filename: '../../../etc/passwd', url: 'https://x.com/a', checksum: '' },
+        {
+          filename: '../../../etc/passwd',
+          url: 'https://x.com/a',
+          checksum: '',
+        },
         { filename: 'sub/dir.txt', url: 'https://x.com/b', checksum: '' },
         { filename: '', url: 'https://x.com/c', checksum: '' },
       ],
@@ -192,15 +188,17 @@ describe('handleFilesSync', () => {
     // Directory does not exist yet
 
     const newContent = Buffer.from('data');
-    fetchMock.mockResolvedValueOnce(
-      new Response(newContent, { status: 200 }),
-    );
+    fetchMock.mockResolvedValueOnce(new Response(newContent, { status: 200 }));
 
     const result = await handleFilesSync({
       category: 'knowledge',
       mode: 'merge',
       files: [
-        { filename: 'file.txt', url: 'https://example.com/file.txt', checksum: '' },
+        {
+          filename: 'file.txt',
+          url: 'https://example.com/file.txt',
+          checksum: '',
+        },
       ],
     });
 

@@ -8,9 +8,14 @@ describe('AgentRunnerParser', () => {
     expect(r1.events).toEqual([]);
     expect(r1.output).toBeUndefined();
 
-    const r2 = parser.parseLine('{"event":"chat.delta","payload":{"content":"Hi"}}');
+    const r2 = parser.parseLine(
+      '{"event":"chat.delta","payload":{"content":"Hi"}}',
+    );
     expect(r2.events).toEqual([
-      { event: 'chat.delta', payload: { sessionKey: 'session-1', runId: 'run-1', content: 'Hi' } },
+      {
+        event: 'chat.delta',
+        payload: { sessionKey: 'session-1', runId: 'run-1', content: 'Hi' },
+      },
     ]);
     expect(r2.output).toBeUndefined();
   });
@@ -18,9 +23,20 @@ describe('AgentRunnerParser', () => {
   it('parses a stream event (agent.tool)', () => {
     const parser = new AgentRunnerParser('s1', 'r1');
     parser.parseLine('---NANOCLAW_STREAM_EVENT---');
-    const r = parser.parseLine('{"event":"agent.tool","payload":{"tool":"Bash","input":{"cmd":"ls"},"output":null}}');
+    const r = parser.parseLine(
+      '{"event":"agent.tool","payload":{"tool":"Bash","input":{"cmd":"ls"},"output":null}}',
+    );
     expect(r.events).toEqual([
-      { event: 'agent.tool', payload: { sessionKey: 's1', runId: 'r1', tool: 'Bash', input: { cmd: 'ls' }, output: null } },
+      {
+        event: 'agent.tool',
+        payload: {
+          sessionKey: 's1',
+          runId: 'r1',
+          tool: 'Bash',
+          input: { cmd: 'ls' },
+          output: null,
+        },
+      },
     ]);
   });
 
@@ -29,8 +45,14 @@ describe('AgentRunnerParser', () => {
     const r1 = parser.parseLine('---NANOCLAW_OUTPUT_START---');
     expect(r1.events).toEqual([]);
 
-    const r2 = parser.parseLine('{"status":"success","result":"Done.","newSessionId":"abc"}');
-    expect(r2.output).toEqual({ status: 'success', result: 'Done.', newSessionId: 'abc' });
+    const r2 = parser.parseLine(
+      '{"status":"success","result":"Done.","newSessionId":"abc"}',
+    );
+    expect(r2.output).toEqual({
+      status: 'success',
+      result: 'Done.',
+      newSessionId: 'abc',
+    });
     expect(r2.events).toEqual([
       {
         event: 'chat.final',
@@ -51,7 +73,9 @@ describe('AgentRunnerParser', () => {
   it('emits chat.error for error ContainerOutput', () => {
     const parser = new AgentRunnerParser('s1', 'r1');
     parser.parseLine('---NANOCLAW_OUTPUT_START---');
-    const r = parser.parseLine('{"status":"error","result":null,"error":"boom"}');
+    const r = parser.parseLine(
+      '{"status":"error","result":null,"error":"boom"}',
+    );
     expect(r.events).toEqual([
       {
         event: 'chat.error',
@@ -63,9 +87,15 @@ describe('AgentRunnerParser', () => {
   it('emits no events for null-result session-update outputs', () => {
     const parser = new AgentRunnerParser('s1', 'r1');
     parser.parseLine('---NANOCLAW_OUTPUT_START---');
-    const r = parser.parseLine('{"status":"success","result":null,"newSessionId":"xyz"}');
+    const r = parser.parseLine(
+      '{"status":"success","result":null,"newSessionId":"xyz"}',
+    );
     expect(r.events).toEqual([]);
-    expect(r.output).toEqual({ status: 'success', result: null, newSessionId: 'xyz' });
+    expect(r.output).toEqual({
+      status: 'success',
+      result: null,
+      newSessionId: 'xyz',
+    });
   });
 
   it('ignores unknown lines', () => {
@@ -88,7 +118,9 @@ describe('AgentRunnerParser', () => {
     parser.parseLine('{"status":"success","result":"one","newSessionId":"a"}');
     parser.parseLine('---NANOCLAW_OUTPUT_END---');
     parser.parseLine('---NANOCLAW_OUTPUT_START---');
-    const r = parser.parseLine('{"status":"success","result":"two","newSessionId":"b"}');
+    const r = parser.parseLine(
+      '{"status":"success","result":"two","newSessionId":"b"}',
+    );
     expect(r.output?.result).toBe('two');
   });
 });

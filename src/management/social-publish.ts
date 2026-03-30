@@ -3,7 +3,7 @@ import { Client } from '@xdevplatform/xdk';
 
 export interface SocialPublishParams {
   approvalId: string;
-  actionType: string;   // x_post, x_reply, x_quote
+  actionType: string; // x_post, x_reply, x_quote
   content: string;
   platform: string;
   accountId: string;
@@ -17,10 +17,16 @@ export interface SocialPublishResult {
   error?: string;
 }
 
-export async function handleSocialPublish(params: SocialPublishParams): Promise<SocialPublishResult> {
+export async function handleSocialPublish(
+  params: SocialPublishParams,
+): Promise<SocialPublishResult> {
   const accessToken = process.env.X_ACCESS_TOKEN;
   if (!accessToken) {
-    return { success: false, error: 'X_ACCESS_TOKEN not set. OneCLI injects this at container startup.' };
+    return {
+      success: false,
+      error:
+        'X_ACCESS_TOKEN not set. OneCLI injects this at container startup.',
+    };
   }
 
   const client = new Client({ accessToken });
@@ -67,7 +73,10 @@ export async function handleSocialPublish(params: SocialPublishParams): Promise<
         };
       }
       default:
-        return { success: false, error: `Unknown action type: ${params.actionType}` };
+        return {
+          success: false,
+          error: `Unknown action type: ${params.actionType}`,
+        };
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

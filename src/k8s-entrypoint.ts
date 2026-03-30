@@ -56,9 +56,10 @@ async function main() {
     'utf-8',
   );
 
-  const runner = AGENT_MODE === 'sdk'
-    ? new AgentRunnerProcess({ maxConcurrent: MAX_CONCURRENT })
-    : new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
+  const runner =
+    AGENT_MODE === 'sdk'
+      ? new AgentRunnerProcess({ maxConcurrent: MAX_CONCURRENT })
+      : new ChildProcessRunner({ maxConcurrent: MAX_CONCURRENT });
   console.log(`Agent mode: ${AGENT_MODE}`);
 
   // --- Channel initialization ---
@@ -176,7 +177,9 @@ async function main() {
     if (remaining.trim()) {
       const runId = sessionRunIds.get(sessionKey) || '';
       if (AGENT_MODE === 'sdk') {
-        const parser = agentRunnerParsers.get(sessionKey) || new AgentRunnerParser(sessionKey, runId);
+        const parser =
+          agentRunnerParsers.get(sessionKey) ||
+          new AgentRunnerParser(sessionKey, runId);
         const result = parser.parseLine(remaining);
         for (const ev of result.events) {
           server.pushEvent(ev.event, ev.payload);
@@ -289,11 +292,13 @@ async function main() {
           initialPrompt: msg.content,
           cwd: workspaceDir,
           // Extra fields for AgentRunnerProcess (ignored by ChildProcessRunner)
-          ...(AGENT_MODE === 'sdk' ? {
-            groupFolder: group.folder,
-            isMain: group.isMain || false,
-            assistantName: group.name,
-          } : {}),
+          ...(AGENT_MODE === 'sdk'
+            ? {
+                groupFolder: group.folder,
+                isMain: group.isMain || false,
+                assistantName: group.name,
+              }
+            : {}),
         } as any)
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);

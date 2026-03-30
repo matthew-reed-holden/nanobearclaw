@@ -152,7 +152,9 @@ export function createHandlers(
         params.approvalMode === 'auto'
           ? 'After generating, publish immediately using the appropriate X tool.'
           : 'Generate a draft only. Do NOT publish. Write the draft content to stdout and exit.',
-      ].filter(Boolean).join('\n\n');
+      ]
+        .filter(Boolean)
+        .join('\n\n');
 
       try {
         await runner.spawn({
@@ -163,7 +165,9 @@ export function createHandlers(
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[social.generate:${params.sessionKey}] Spawn failed: ${message}`);
+        console.error(
+          `[social.generate:${params.sessionKey}] Spawn failed: ${message}`,
+        );
         pushEvent?.('chat.error', {
           sessionKey: params.sessionKey,
           runId,
@@ -203,7 +207,9 @@ export function createHandlers(
         params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
         process.env.SYSTEM_PROMPT || '',
         `You are monitoring ${params.platform} engagement. Scan the timeline, evaluate items against the criteria below, and engage per the approval policy in /workspace/group/approval-policy.json.`,
-      ].filter(Boolean).join('\n\n');
+      ]
+        .filter(Boolean)
+        .join('\n\n');
 
       try {
         await runner.spawn({
@@ -214,7 +220,9 @@ export function createHandlers(
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[social.monitor:${params.sessionKey}] Spawn failed: ${message}`);
+        console.error(
+          `[social.monitor:${params.sessionKey}] Spawn failed: ${message}`,
+        );
         pushEvent?.('chat.error', {
           sessionKey: params.sessionKey,
           runId,

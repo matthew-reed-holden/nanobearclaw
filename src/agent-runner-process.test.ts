@@ -253,7 +253,9 @@ describe('AgentRunnerProcess', () => {
     fakeProc.stderr.push('some error');
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(onOutput).toHaveBeenCalledWith(expect.stringContaining('some output'));
+    expect(onOutput).toHaveBeenCalledWith(
+      expect.stringContaining('some output'),
+    );
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('some error'));
     await runner.killAll();
   });

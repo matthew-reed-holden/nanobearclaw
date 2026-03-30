@@ -10,8 +10,10 @@ import type {
 } from './protocol.js';
 
 // Base directory for shared files — configurable for testing
-let sharedBase =
-  path.join(process.env.WORKSPACE_DIR || '/home/node/.nanoclaw', 'shared');
+let sharedBase = path.join(
+  process.env.WORKSPACE_DIR || '/home/node/.nanoclaw',
+  'shared',
+);
 
 /** Override the shared base directory (used by tests). */
 export function setSharedBase(dir: string): void {

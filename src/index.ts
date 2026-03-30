@@ -51,7 +51,11 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
-import { ApprovalStore, startApprovalExpiryTimer, writeApprovalResult } from './approval.js';
+import {
+  ApprovalStore,
+  startApprovalExpiryTimer,
+  writeApprovalResult,
+} from './approval.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
 import { ChannelType } from './text-styles.js';
 import {
@@ -187,8 +191,6 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
       logger.info({ folder: group.folder }, 'Created CLAUDE.md from template');
     }
   }
-
-
 
   logger.info(
     { jid, name: group.name, folder: group.folder },
@@ -707,7 +709,11 @@ async function main(): Promise<void> {
           const approved = approvalMatch[1].toUpperCase() === 'YES';
           const approvalId = idMatch[1];
           const channelName = findChannel(channels, chatJid)?.name || 'unknown';
-          const resolved = approvalStore.resolve(approvalId, approved, `${channelName}:${msg.sender}`);
+          const resolved = approvalStore.resolve(
+            approvalId,
+            approved,
+            `${channelName}:${msg.sender}`,
+          );
           if (resolved) {
             writeApprovalResult(DATA_DIR, resolved.groupFolder, approvalId, {
               requestId: approvalId,
@@ -717,7 +723,12 @@ async function main(): Promise<void> {
             });
             const channel = findChannel(channels, chatJid);
             if (channel) {
-              channel.sendMessage(chatJid, `Approval ${approvalId}: ${approved ? 'Approved ✓' : 'Rejected ✗'}`).catch(() => {});
+              channel
+                .sendMessage(
+                  chatJid,
+                  `Approval ${approvalId}: ${approved ? 'Approved ✓' : 'Rejected ✗'}`,
+                )
+                .catch(() => {});
             }
             return; // Don't store as regular message
           }

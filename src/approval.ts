@@ -43,7 +43,12 @@ export function writeApprovalResult(
   dataDir: string,
   sourceGroup: string,
   requestId: string,
-  result: { requestId: string; approved: boolean; respondedBy: string; respondedAt: string },
+  result: {
+    requestId: string;
+    approved: boolean;
+    respondedBy: string;
+    respondedAt: string;
+  },
 ): void {
   const resultsDir = path.join(dataDir, 'ipc', sourceGroup, 'approval_results');
   fs.mkdirSync(resultsDir, { recursive: true });
@@ -112,13 +117,23 @@ export class ApprovalStore {
       INSERT INTO pending_approvals (id, category, action, summary, details, group_folder, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(req.id, req.category, req.action, req.summary, JSON.stringify(req.details), req.groupFolder, req.expiresAt);
+    stmt.run(
+      req.id,
+      req.category,
+      req.action,
+      req.summary,
+      JSON.stringify(req.details),
+      req.groupFolder,
+      req.expiresAt,
+    );
     logger.debug({ id: req.id, category: req.category }, 'Approval created');
     return this.get(req.id)!;
   }
 
   get(id: string): Approval | undefined {
-    const row = this.db.prepare('SELECT * FROM pending_approvals WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const row = this.db
+      .prepare('SELECT * FROM pending_approvals WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
     if (!row) return undefined;
     return this.rowToApproval(row);
   }
@@ -129,16 +144,24 @@ export class ApprovalStore {
       : 'SELECT * FROM pending_approvals WHERE status = ? ORDER BY created_at DESC';
     const args = groupFolder ? ['pending', groupFolder] : ['pending'];
     const rows = this.db.prepare(sql).all(...args) as Record<string, unknown>[];
-    return rows.map(r => this.rowToApproval(r));
+    return rows.map((r) => this.rowToApproval(r));
   }
 
-  resolve(id: string, approved: boolean, respondedBy: string): Approval | undefined {
+  resolve(
+    id: string,
+    approved: boolean,
+    respondedBy: string,
+  ): Approval | undefined {
     const stmt = this.db.prepare(`
       UPDATE pending_approvals
       SET status = ?, responded_by = ?, responded_at = datetime('now')
       WHERE id = ? AND status = 'pending'
     `);
-    const result = stmt.run(approved ? 'approved' : 'rejected', respondedBy, id);
+    const result = stmt.run(
+      approved ? 'approved' : 'rejected',
+      respondedBy,
+      id,
+    );
     if (result.changes === 0) return undefined;
     logger.debug({ id, approved, respondedBy }, 'Approval resolved');
     return this.get(id);
@@ -159,15 +182,23 @@ export class ApprovalStore {
   }
 
   listRecentlyExpired(): { id: string; groupFolder: string }[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT id, group_folder FROM pending_approvals
       WHERE status = 'expired' AND responded_at IS NULL
-    `).all() as { id: string; group_folder: string }[];
-    return rows.map(r => ({ id: r.id, groupFolder: r.group_folder }));
+    `,
+      )
+      .all() as { id: string; group_folder: string }[];
+    return rows.map((r) => ({ id: r.id, groupFolder: r.group_folder }));
   }
 
   markNotified(id: string): void {
-    this.db.prepare(`UPDATE pending_approvals SET responded_at = datetime('now') WHERE id = ?`).run(id);
+    this.db
+      .prepare(
+        `UPDATE pending_approvals SET responded_at = datetime('now') WHERE id = ?`,
+      )
+      .run(id);
   }
 
   private rowToApproval(row: Record<string, unknown>): Approval {

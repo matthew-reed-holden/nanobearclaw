@@ -255,7 +255,9 @@ describe('ensureSharedSymlink', () => {
       throw eexistError;
     });
 
-    expect(() => ensureSharedSymlink('/workspace/chats/test-group')).not.toThrow();
+    expect(() =>
+      ensureSharedSymlink('/workspace/chats/test-group'),
+    ).not.toThrow();
   });
 
   it('throws on non-EEXIST errors', () => {
@@ -264,7 +266,9 @@ describe('ensureSharedSymlink', () => {
       throw enoentError;
     });
 
-    expect(() => ensureSharedSymlink('/workspace/chats/test-group')).toThrow('ENOENT');
+    expect(() => ensureSharedSymlink('/workspace/chats/test-group')).toThrow(
+      'ENOENT',
+    );
   });
 });
 

@@ -54,7 +54,13 @@ export class MemorySyncManager {
       const filePath = path.join(this._memoryDir, name);
 
       // Validate filename
-      if (name.includes('/') || name.includes('\\') || name.includes('..') || name === '') continue;
+      if (
+        name.includes('/') ||
+        name.includes('\\') ||
+        name.includes('..') ||
+        name === ''
+      )
+        continue;
 
       try {
         const stat = await fs.stat(filePath);

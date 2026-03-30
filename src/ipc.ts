@@ -9,7 +9,12 @@ import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
-import { ApprovalStore, loadApprovalPolicy, getActionMode, writeApprovalResult } from './approval.js';
+import {
+  ApprovalStore,
+  loadApprovalPolicy,
+  getActionMode,
+  writeApprovalResult,
+} from './approval.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
@@ -451,9 +456,9 @@ export async function processTaskIpc(
           );
           break;
         }
-        // Defense in depth: agent cannot set isMain via IPC.                                                                                                                                    
-        // Preserve isMain from the existing registration so IPC config                                                                                                                          
-        // updates (e.g. adding additionalMounts) don't strip the flag.                                                                                                                          
+        // Defense in depth: agent cannot set isMain via IPC.
+        // Preserve isMain from the existing registration so IPC config
+        // updates (e.g. adding additionalMounts) don't strip the flag.
         const existingGroup = registeredGroups[data.jid];
         deps.registerGroup(data.jid, {
           name: data.name,
@@ -473,13 +478,23 @@ export async function processTaskIpc(
       break;
 
     case 'request_approval': {
-      const { requestId, category, action, summary, details, expiresAt } = data as Record<string, unknown>;
+      const { requestId, category, action, summary, details, expiresAt } =
+        data as Record<string, unknown>;
       if (!requestId || !category || !action || !summary) {
-        logger.warn({ type: data.type }, 'request_approval missing required fields');
+        logger.warn(
+          { type: data.type },
+          'request_approval missing required fields',
+        );
         break;
       }
 
-      const policyPath = path.join(DATA_DIR, '..', 'groups', sourceGroup, 'approval-policy.json');
+      const policyPath = path.join(
+        DATA_DIR,
+        '..',
+        'groups',
+        sourceGroup,
+        'approval-policy.json',
+      );
       const policy = loadApprovalPolicy(policyPath);
       const mode = getActionMode(policy, category as string);
 
@@ -490,7 +505,10 @@ export async function processTaskIpc(
           respondedBy: 'auto',
           respondedAt: new Date().toISOString(),
         });
-        logger.info({ requestId, category }, 'Approval auto-approved by policy');
+        logger.info(
+          { requestId, category },
+          'Approval auto-approved by policy',
+        );
         break;
       }
 
@@ -507,7 +525,9 @@ export async function processTaskIpc(
 
       // mode === 'confirm'
       const expiryMinutes = policy.expiryMinutes ?? 60;
-      const expiresAtDate = (expiresAt as string) || new Date(Date.now() + expiryMinutes * 60_000).toISOString();
+      const expiresAtDate =
+        (expiresAt as string) ||
+        new Date(Date.now() + expiryMinutes * 60_000).toISOString();
 
       deps.approvalStore.create({
         id: requestId as string,
@@ -525,11 +545,17 @@ export async function processTaskIpc(
         try {
           await deps.sendToGroup(sourceGroup, notifyText);
         } catch (err) {
-          logger.error({ err, requestId }, 'Failed to send approval notification');
+          logger.error(
+            { err, requestId },
+            'Failed to send approval notification',
+          );
         }
       }
 
-      logger.info({ requestId, category, expiresAt: expiresAtDate }, 'Approval pending confirmation');
+      logger.info(
+        { requestId, category, expiresAt: expiresAtDate },
+        'Approval pending confirmation',
+      );
       break;
     }
 
