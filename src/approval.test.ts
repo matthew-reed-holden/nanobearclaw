@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { ApprovalStore } from './approval.js';
+import { ApprovalStore, loadApprovalPolicy, getActionMode } from './approval.js';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 describe('ApprovalStore', () => {
   let db: Database.Database;
@@ -120,5 +123,59 @@ describe('ApprovalStore', () => {
 
     const allApprovals = store.listPending();
     expect(allApprovals).toHaveLength(2);
+  });
+});
+
+describe('ApprovalPolicy', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'approval-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('loads policy from JSON file', () => {
+    const policyPath = path.join(tmpDir, 'approval-policy.json');
+    fs.writeFileSync(policyPath, JSON.stringify({
+      defaults: { mode: 'confirm' },
+      actions: {
+        x_like: { mode: 'auto' },
+        x_post: { mode: 'confirm' },
+      },
+      notifyChannels: ['whatsapp'],
+      expiryMinutes: 30,
+    }));
+
+    const policy = loadApprovalPolicy(policyPath);
+    expect(policy.defaults.mode).toBe('confirm');
+    expect(policy.actions.x_like.mode).toBe('auto');
+    expect(policy.expiryMinutes).toBe(30);
+  });
+
+  it('returns default policy when file does not exist', () => {
+    const policy = loadApprovalPolicy(path.join(tmpDir, 'nonexistent.json'));
+    expect(policy.defaults.mode).toBe('confirm');
+    expect(policy.notifyChannels).toEqual([]);
+    expect(policy.expiryMinutes).toBe(60);
+  });
+
+  it('resolves action mode with fallback to defaults', () => {
+    const policy = loadApprovalPolicy(path.join(tmpDir, 'nonexistent.json'));
+    expect(getActionMode(policy, 'x_post')).toBe('confirm');
+
+    const policyPath = path.join(tmpDir, 'approval-policy.json');
+    fs.writeFileSync(policyPath, JSON.stringify({
+      defaults: { mode: 'confirm' },
+      actions: { x_like: { mode: 'auto' } },
+      notifyChannels: [],
+      expiryMinutes: 60,
+    }));
+
+    const loaded = loadApprovalPolicy(policyPath);
+    expect(getActionMode(loaded, 'x_like')).toBe('auto');
+    expect(getActionMode(loaded, 'x_post')).toBe('confirm');
   });
 });

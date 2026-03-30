@@ -1,5 +1,42 @@
+import fs from 'fs';
 import Database from 'better-sqlite3';
 import { logger } from './logger.js';
+
+export interface ApprovalPolicy {
+  defaults: { mode: 'auto' | 'confirm' | 'block' };
+  actions: Record<string, { mode: 'auto' | 'confirm' | 'block' }>;
+  notifyChannels: string[];
+  expiryMinutes: number;
+}
+
+const DEFAULT_POLICY: ApprovalPolicy = {
+  defaults: { mode: 'confirm' },
+  actions: {},
+  notifyChannels: [],
+  expiryMinutes: 60,
+};
+
+export function loadApprovalPolicy(filePath: string): ApprovalPolicy {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return {
+      defaults: parsed.defaults ?? DEFAULT_POLICY.defaults,
+      actions: parsed.actions ?? {},
+      notifyChannels: parsed.notifyChannels ?? [],
+      expiryMinutes: parsed.expiryMinutes ?? 60,
+    };
+  } catch {
+    return { ...DEFAULT_POLICY };
+  }
+}
+
+export function getActionMode(
+  policy: ApprovalPolicy,
+  action: string,
+): 'auto' | 'confirm' | 'block' {
+  return policy.actions[action]?.mode ?? policy.defaults.mode;
+}
 
 export interface ApprovalRequest {
   id: string;
