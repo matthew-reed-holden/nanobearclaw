@@ -1,6 +1,6 @@
 # container/Dockerfile.ws
 # NanoClaw K8s / WebSocket Management Mode
-# Runs Claude CLI as child processes behind a WebSocket management API
+# Runs agent-runner (SDK) or Claude CLI as child processes behind a WebSocket management API
 
 FROM node:22-slim
 
@@ -31,8 +31,19 @@ RUN apt-get update && apt-get install -y \
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install claude-code globally
+# Install claude-code globally (still needed for AGENT_MODE=cli fallback)
 RUN npm install -g @anthropic-ai/claude-code
+
+# Agent-runner: install deps + pre-compile TypeScript
+WORKDIR /ws/agent-runner
+COPY container/agent-runner/package*.json ./
+RUN npm ci --omit=dev
+COPY container/agent-runner/src/ ./src/
+COPY container/agent-runner/tsconfig.json ./
+RUN npx tsc --outDir dist && rm -rf src tsconfig.json
+
+# Skills (referenced by agent-runner MCP servers)
+COPY container/skills/ /ws/skills/
 
 # Management server + channel runtime
 WORKDIR /ws
