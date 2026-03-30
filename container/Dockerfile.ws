@@ -40,10 +40,9 @@ COPY container/agent-runner/package*.json ./
 RUN npm ci
 COPY container/agent-runner/src/ ./src/
 COPY container/agent-runner/tsconfig.json ./
+# Copy skills into agent-runner src so they compile alongside ipc-mcp-stdio.ts
+COPY container/skills/ ./src/skills/
 RUN npx tsc --outDir dist && rm -rf src tsconfig.json && npm prune --omit=dev
-
-# Skills (referenced by agent-runner MCP servers)
-COPY container/skills/ /ws/skills/
 
 # Management server + channel runtime
 WORKDIR /ws
