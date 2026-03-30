@@ -37,10 +37,10 @@ RUN npm install -g @anthropic-ai/claude-code
 # Agent-runner: install deps + pre-compile TypeScript
 WORKDIR /ws/agent-runner
 COPY container/agent-runner/package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 COPY container/agent-runner/src/ ./src/
 COPY container/agent-runner/tsconfig.json ./
-RUN npx tsc --outDir dist && rm -rf src tsconfig.json
+RUN npx tsc --outDir dist && rm -rf src tsconfig.json && npm prune --omit=dev
 
 # Skills (referenced by agent-runner MCP servers)
 COPY container/skills/ /ws/skills/
