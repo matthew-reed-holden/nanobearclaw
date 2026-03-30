@@ -3,6 +3,7 @@ import type { ChannelStatusReporter } from './channel-status.js';
 import type { GroupsSyncHandler } from './groups-sync.js';
 import type { WhatsAppPairingRelay } from './whatsapp-relay.js';
 import { handleFilesSync, handleFilesList } from './files-sync.js';
+import { handleSocialPublish } from './social-publish.js';
 import { SHARED_RESOURCE_PROMPT } from '../shared-prompt.js';
 
 // Maps sessionKey → the runId of its most recent chat.send.
@@ -125,6 +126,103 @@ export function createHandlers(
 
     'files.list': async (params: any) => {
       return handleFilesList(params);
+    },
+
+    'social.generate': async (params: {
+      sessionKey: string;
+      platform: string;
+      prompt: string;
+      personaMd?: string;
+      ragContext?: string;
+      approvalMode: string;
+    }) => {
+      const runId = crypto.randomUUID();
+      sessionRunIds.set(params.sessionKey, runId);
+
+      if (runner.getSession(params.sessionKey)) {
+        await runner.kill(params.sessionKey);
+      }
+
+      const systemParts = [
+        SHARED_RESOURCE_PROMPT,
+        params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
+        params.ragContext ? `## Knowledge Context\n\n${params.ragContext}` : '',
+        process.env.SYSTEM_PROMPT || '',
+        `You are generating ${params.platform} content.`,
+        params.approvalMode === 'auto'
+          ? 'After generating, publish immediately using the appropriate X tool.'
+          : 'Generate a draft only. Do NOT publish. Write the draft content to stdout and exit.',
+      ].filter(Boolean).join('\n\n');
+
+      try {
+        await runner.spawn({
+          sessionKey: params.sessionKey,
+          model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
+          systemPrompt: systemParts,
+          initialPrompt: params.prompt,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[social.generate:${params.sessionKey}] Spawn failed: ${message}`);
+        pushEvent?.('chat.error', {
+          sessionKey: params.sessionKey,
+          runId,
+          error: message,
+        });
+      }
+
+      return { runId, sessionKey: params.sessionKey };
+    },
+
+    'social.publish': async (params: {
+      approvalId: string;
+      actionType: string;
+      content: string;
+      platform: string;
+      accountId: string;
+      targetPostId?: string;
+    }) => {
+      return handleSocialPublish(params);
+    },
+
+    'social.monitor': async (params: {
+      sessionKey: string;
+      platform: string;
+      prompt: string;
+      personaMd?: string;
+    }) => {
+      const runId = crypto.randomUUID();
+      sessionRunIds.set(params.sessionKey, runId);
+
+      if (runner.getSession(params.sessionKey)) {
+        await runner.kill(params.sessionKey);
+      }
+
+      const systemParts = [
+        SHARED_RESOURCE_PROMPT,
+        params.personaMd ? `## Persona\n\n${params.personaMd}` : '',
+        process.env.SYSTEM_PROMPT || '',
+        `You are monitoring ${params.platform} engagement. Scan the timeline, evaluate items against the criteria below, and engage per the approval policy in /workspace/group/approval-policy.json.`,
+      ].filter(Boolean).join('\n\n');
+
+      try {
+        await runner.spawn({
+          sessionKey: params.sessionKey,
+          model: process.env.MODEL_PRIMARY || 'claude-sonnet-4-20250514',
+          systemPrompt: systemParts,
+          initialPrompt: params.prompt,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[social.monitor:${params.sessionKey}] Spawn failed: ${message}`);
+        pushEvent?.('chat.error', {
+          sessionKey: params.sessionKey,
+          runId,
+          error: message,
+        });
+      }
+
+      return { runId, sessionKey: params.sessionKey };
     },
   };
 }
