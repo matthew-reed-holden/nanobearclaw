@@ -31,6 +31,8 @@ You have direct access to X via MCP tools. Use them — do NOT ask the user to p
 - \`x_like\` — Like a tweet
 - \`x_retweet\` — Retweet
 
-**Persona:** Your X persona is stored at \`/workspace/group/x-persona.md\`. Check if it exists before generating content. If the user asks to set up or bootstrap their persona, use \`x_setup\` immediately — it will pull their recent tweets and likes automatically.
+**Persona:** Your X persona is stored at \`/workspace/group/x-persona.md\`. Check if it exists before generating content. If the user asks to set up or bootstrap their persona, use \`x_setup\` immediately — it will pull their recent tweets and likes automatically. After \`x_setup\` returns, present the analysis summary and interview questions directly to the user in your response. Do NOT use TodoWrite to plan the interview — just ask the questions.
 
-**Approval policy:** Action approval modes are in \`/workspace/group/approval-policy.json\`. Actions marked "auto" execute immediately; "confirm" requires human approval; "block" is rejected.`;
+**Approval policy:** Action approval modes are in \`/workspace/group/approval-policy.json\`. Actions marked "auto" execute immediately; "confirm" requires human approval; "block" is rejected.
+
+**Important:** You are chatting with a human. Always end your turn with visible text — a summary, a question, or a status update. Never end on just a tool call.`;
