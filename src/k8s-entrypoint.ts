@@ -49,7 +49,10 @@ async function main() {
       if (eqIdx < 1) continue;
       const key = trimmed.slice(0, eqIdx).trim();
       let val = trimmed.slice(eqIdx + 1).trim();
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
         val = val.slice(1, -1);
       }
       // Don't overwrite Docker-level env vars (INSTANCE_ID, MANAGEMENT_TOKEN, etc.)
@@ -73,12 +76,20 @@ async function main() {
         if (!process.env[key]) process.env[key] = val;
       }
       if (config.caCertificate && config.caCertificateContainerPath) {
-        fs.mkdirSync(path.dirname(config.caCertificateContainerPath), { recursive: true });
-        fs.writeFileSync(config.caCertificateContainerPath, config.caCertificate);
+        fs.mkdirSync(path.dirname(config.caCertificateContainerPath), {
+          recursive: true,
+        });
+        fs.writeFileSync(
+          config.caCertificateContainerPath,
+          config.caCertificate,
+        );
       }
       console.log('OneCLI proxy configured');
     } catch (err) {
-      console.warn('OneCLI proxy setup failed (non-fatal):', err instanceof Error ? err.message : err);
+      console.warn(
+        'OneCLI proxy setup failed (non-fatal):',
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 
@@ -95,7 +106,9 @@ async function main() {
 
   // Ensure workspace directories for MCP tools (IPC, group data)
   fs.mkdirSync(path.join(process.cwd(), 'group'), { recursive: true });
-  fs.mkdirSync(path.join(process.cwd(), 'ipc', 'messages'), { recursive: true });
+  fs.mkdirSync(path.join(process.cwd(), 'ipc', 'messages'), {
+    recursive: true,
+  });
   fs.mkdirSync(path.join(process.cwd(), 'ipc', 'tasks'), { recursive: true });
 
   // Write CLAUDE.md at workspace root so Claude Code reads shared memory
@@ -353,9 +366,7 @@ async function main() {
           groupFolder: group.folder,
           isMain: group.isMain || false,
           // Extra fields for AgentRunnerProcess only
-          ...(AGENT_MODE === 'sdk'
-            ? { assistantName: group.name }
-            : {}),
+          ...(AGENT_MODE === 'sdk' ? { assistantName: group.name } : {}),
         } as any)
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
