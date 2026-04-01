@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { OneCLI } from '@onecli-sh/sdk';
 import { ChildProcessRunner } from './child-process-runner.js';
 import {
   ManagementServer,
@@ -36,6 +37,51 @@ const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '3');
 const AGENT_MODE = process.env.AGENT_MODE || 'cli';
 
 async function main() {
+  // Load .env early so OneCLI and credential vars are available at startup.
+  // child-process-runner also loads .env per-spawn, but we need it here for
+  // OneCLI self-configuration before any spawns happen.
+  const dotEnvPath = path.join(process.cwd(), '.env');
+  if (fs.existsSync(dotEnvPath)) {
+    for (const line of fs.readFileSync(dotEnvPath, 'utf-8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      // Don't overwrite Docker-level env vars (INSTANCE_ID, MANAGEMENT_TOKEN, etc.)
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+
+  // Self-configure OneCLI proxy if available (mirrors the standard path's
+  // onecli.applyContainerConfig pattern, but applied to process.env since
+  // this process IS the container rather than spawning sub-containers).
+  const onecliUrl = process.env.ONECLI_URL;
+  const onecliApiKey = process.env.ONECLI_API_KEY;
+  const instanceId = process.env.INSTANCE_ID;
+  if (onecliUrl && onecliApiKey && instanceId) {
+    try {
+      const onecli = new OneCLI({ url: onecliUrl, apiKey: onecliApiKey });
+      const ident = `oc-${instanceId}`;
+      await onecli.ensureAgent({ name: ident, identifier: ident });
+      const config = await onecli.getContainerConfig(ident);
+      for (const [key, val] of Object.entries(config.env)) {
+        if (!process.env[key]) process.env[key] = val;
+      }
+      if (config.caCertificate && config.caCertificateContainerPath) {
+        fs.mkdirSync(path.dirname(config.caCertificateContainerPath), { recursive: true });
+        fs.writeFileSync(config.caCertificateContainerPath, config.caCertificate);
+      }
+      console.log('OneCLI proxy configured');
+    } catch (err) {
+      console.warn('OneCLI proxy setup failed (non-fatal):', err instanceof Error ? err.message : err);
+    }
+  }
+
   // Ensure top-level chats/ workspace directory exists
   const chatsDir = path.join(process.cwd(), 'chats');
   if (!fs.existsSync(chatsDir)) {
@@ -46,6 +92,11 @@ async function main() {
   const sharedDir = path.join(process.cwd(), 'shared');
   fs.mkdirSync(path.join(sharedDir, 'knowledge'), { recursive: true });
   fs.mkdirSync(path.join(sharedDir, 'memory'), { recursive: true });
+
+  // Ensure workspace directories for MCP tools (IPC, group data)
+  fs.mkdirSync(path.join(process.cwd(), 'group'), { recursive: true });
+  fs.mkdirSync(path.join(process.cwd(), 'ipc', 'messages'), { recursive: true });
+  fs.mkdirSync(path.join(process.cwd(), 'ipc', 'tasks'), { recursive: true });
 
   // Write CLAUDE.md at workspace root so Claude Code reads shared memory
   // instructions as primary config. --system-prompt alone doesn't override
@@ -299,13 +350,11 @@ async function main() {
           systemPrompt: effectivePrompt,
           initialPrompt: msg.content,
           cwd: workspaceDir,
-          // Extra fields for AgentRunnerProcess (ignored by ChildProcessRunner)
+          groupFolder: group.folder,
+          isMain: group.isMain || false,
+          // Extra fields for AgentRunnerProcess only
           ...(AGENT_MODE === 'sdk'
-            ? {
-                groupFolder: group.folder,
-                isMain: group.isMain || false,
-                assistantName: group.name,
-              }
+            ? { assistantName: group.name }
             : {}),
         } as any)
         .catch((err: unknown) => {

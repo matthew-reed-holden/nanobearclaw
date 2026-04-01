@@ -7,10 +7,11 @@ let cachedUserId: string | null = null;
 export function getXClient(): Client {
   if (cachedClient) return cachedClient;
 
-  const accessToken = process.env.X_ACCESS_TOKEN;
-  if (!accessToken) {
-    throw new Error('X_ACCESS_TOKEN not set. OneCLI injects this at container startup.');
-  }
+  // OneCLI injects the real Bearer token at request time by intercepting
+  // outbound requests to api.twitter.com and replacing the Authorization
+  // header. The SDK still requires a non-empty accessToken to initialize,
+  // so we use a placeholder that OneCLI will overwrite on every request.
+  const accessToken = process.env.X_ACCESS_TOKEN || 'onecli-proxy-placeholder';
 
   cachedClient = new Client({ accessToken });
   return cachedClient;

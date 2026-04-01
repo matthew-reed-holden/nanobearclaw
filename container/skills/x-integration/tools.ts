@@ -17,10 +17,12 @@ import { buildBootstrapInterviewPrompt } from './interview.js';
 import { runMonitorCycle } from '../social-monitor/framework.js';
 import type { MonitorContext, EngagementLogEntry } from '../social-monitor/interfaces.js';
 
-const TASKS_DIR = '/workspace/ipc/tasks';
-const IPC_DIR = '/workspace/ipc';
+const WORKSPACE_BASE = process.env.NANOCLAW_WORKSPACE_BASE || '/workspace';
+const TASKS_DIR = path.join(WORKSPACE_BASE, 'ipc', 'tasks');
+const IPC_DIR = path.join(WORKSPACE_BASE, 'ipc');
+const GROUP_DIR = path.join(WORKSPACE_BASE, 'group');
 const GROUP_FOLDER = process.env.NANOCLAW_GROUP_FOLDER || '';
-const APPROVAL_POLICY_PATH = '/workspace/group/approval-policy.json';
+const APPROVAL_POLICY_PATH = path.join(GROUP_DIR, 'approval-policy.json');
 const IS_MAIN = process.env.NANOCLAW_IS_MAIN === '1';
 
 function writeIpcFile(dir: string, data: object): string {
@@ -262,8 +264,8 @@ export function createXTools(server: any) {
         const monitor = new XMonitor();
         const ctx: MonitorContext = {
           groupFolder: GROUP_FOLDER,
-          personaPath: '/workspace/group/x-persona.md',
-          approvalPolicyPath: '/workspace/group/approval-policy.json',
+          personaPath: path.join(GROUP_DIR, 'x-persona.md'),
+          approvalPolicyPath: APPROVAL_POLICY_PATH,
           dryRun: false,
         };
         const draft = await monitor.bootstrapPersona!(ctx);

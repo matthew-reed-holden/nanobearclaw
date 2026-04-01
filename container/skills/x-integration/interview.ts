@@ -103,7 +103,7 @@ ${existingContext}
 2. Be conversational and encouraging. Acknowledge good answers.
 3. If an answer is vague, ask a specific follow-up to get concrete details.
 4. After all questions are answered (or the user says they're done), generate the complete persona markdown.
-5. Save the persona to /workspace/group/x-persona.md using the file writing tools.
+5. Save the persona to x-persona.md in the current working directory using the file writing tools.
 6. The persona should follow this structure:
 
 \`\`\`markdown

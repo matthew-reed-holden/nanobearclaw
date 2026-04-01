@@ -13,7 +13,10 @@ import { CronExpressionParser } from 'cron-parser';
 // @ts-ignore - Copied during Docker build from container/skills/
 import { createXTools } from './skills/x-integration/tools.js';
 
-const IPC_DIR = '/workspace/ipc';
+// Base workspace path — /workspace in K8s (PVC), /home/node/.nanoclaw in Docker.
+const WORKSPACE_BASE = process.env.NANOCLAW_WORKSPACE_BASE || '/workspace';
+const IPC_DIR = path.join(WORKSPACE_BASE, 'ipc');
+const GROUP_DIR = path.join(WORKSPACE_BASE, 'group');
 const MESSAGES_DIR = path.join(IPC_DIR, 'messages');
 const TASKS_DIR = path.join(IPC_DIR, 'tasks');
 

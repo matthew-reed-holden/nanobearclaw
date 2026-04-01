@@ -1,6 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type {
   AgentRunner,
   SpawnOptions as ISpawnOptions,
@@ -9,6 +11,7 @@ import type {
 
 export interface SpawnOptions extends ISpawnOptions {
   cwd?: string;
+  groupFolder?: string;
   onOutput?: (data: string) => void;
   onError?: (data: string) => void;
   onExit?: (code: number | null) => void;
@@ -51,6 +54,11 @@ function loadDotEnv(path: string): Record<string, string> {
 }
 
 const DOTENV_PATH = '/home/node/.nanoclaw/.env';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MCP_SERVER_PATH = path.resolve(
+  __dirname,
+  '../agent-runner/dist/ipc-mcp-stdio.js',
+);
 
 export class ChildProcessRunner extends EventEmitter implements AgentRunner {
   private sessions = new Map<string, AgentSession>();
@@ -69,6 +77,27 @@ export class ChildProcessRunner extends EventEmitter implements AgentRunner {
       throw new Error(`Session ${opts.sessionKey} already exists`);
     }
 
+    // Build MCP config so Claude CLI can access the nanoclaw MCP server
+    // (which registers X tools, send_message, scheduling, etc.)
+    const mcpConfigArgs: string[] = [];
+    if (existsSync(MCP_SERVER_PATH)) {
+      const mcpConfig = {
+        mcpServers: {
+          nanoclaw: {
+            command: 'node',
+            args: [MCP_SERVER_PATH],
+            env: {
+              NANOCLAW_CHAT_JID: opts.sessionKey,
+              NANOCLAW_GROUP_FOLDER: opts.groupFolder || opts.sessionKey,
+              NANOCLAW_IS_MAIN: opts.isMain ? '1' : '0',
+              NANOCLAW_WORKSPACE_BASE: path.resolve(process.cwd()),
+            },
+          },
+        },
+      };
+      mcpConfigArgs.push('--mcp-config', JSON.stringify(mcpConfig));
+    }
+
     const args = [
       '-p', // Print/pipe mode — required for non-interactive use
       '--verbose', // Required: stream-json needs --verbose in print mode
@@ -78,6 +107,8 @@ export class ChildProcessRunner extends EventEmitter implements AgentRunner {
       'stream-json',
       '--include-partial-messages', // Emit stream_event with text_delta for real-time streaming
       '--dangerously-skip-permissions', // Required — no TTY to accept permissions
+      ...mcpConfigArgs,
+      ...(mcpConfigArgs.length > 0 ? ['--strict-mcp-config'] : []),
       ...(opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : []),
       ...(opts.systemPrompt ? ['--system-prompt', opts.systemPrompt] : []),
       ...(opts.initialPrompt ? [opts.initialPrompt] : []), // Positional arg: the user message

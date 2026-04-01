@@ -27,7 +27,7 @@ export async function runMonitorCycle(
   ctx: MonitorContext,
   deps: FrameworkDeps,
 ): Promise<{ actionsExecuted: number; actionsPending: number }> {
-  const groupDir = `/workspace/group`;
+  const groupDir = path.join(process.env.NANOCLAW_WORKSPACE_BASE || '/workspace', 'group');
   const dedupPath = path.join(groupDir, 'seen_items.db');
   const logPath = path.join(groupDir, 'engagement_log.db');
 

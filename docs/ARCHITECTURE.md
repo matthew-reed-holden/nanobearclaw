@@ -1,16 +1,21 @@
 # NanoClaw Architecture
 
-Living architecture documentation. Last updated: March 27, 2026.
+Living architecture documentation. Last updated: March 30, 2026.
 
 ---
 
 ## System Overview
 
-NanoClaw is a single Node.js process that orchestrates messaging channels, routes messages to Claude agents running in isolated Linux containers, and manages scheduled tasks. Security is achieved through OS-level container isolation, not application-level permissions.
+NanoClaw is a Node.js process that orchestrates messaging channels, routes messages to Claude agents, and manages scheduled tasks. It operates in two deployment modes selected by the `AGENT_MODE` environment variable:
+
+- **`cli` mode (default / standalone):** Single process with a message-poll loop, SQLite, and per-group Docker/Apple Container isolation. Agents run as child processes wrapping the `claude` CLI.
+- **`sdk` mode (K8s / platform):** WebSocket management server (`ManagementServer`) that BearClaw Platform drives over a persistent connection. Agents run via `AgentRunnerProcess`, a stdin-IPC wrapper around the pre-compiled TypeScript agent-runner. Container image: `Dockerfile.ws`.
+
+Security is achieved through OS-level container isolation and a credential proxy — no secrets are passed into containers directly.
 
 ```mermaid
 graph TB
-    subgraph Channels["Messaging Channels"]
+    subgraph Channels["Messaging Channels (cli mode)"]
         WA[WhatsApp<br/>Baileys]
         TG[Telegram<br/>Grammy]
         DC[Discord<br/>discord.js]
@@ -18,7 +23,7 @@ graph TB
         EM[Emacs<br/>Local dev]
     end
 
-    subgraph Core["NanoClaw Process"]
+    subgraph Core["NanoClaw Process — cli mode"]
         CR[Channel Registry]
         ORC[Orchestrator<br/>index.ts]
         DB[(SQLite)]
@@ -27,22 +32,37 @@ graph TB
         TS[Task Scheduler]
         IPC[IPC Watcher]
         CP[Credential Proxy]
+        APR[Approval Store]
+    end
+
+    subgraph K8sMode["NanoClaw — sdk mode (K8s)"]
+        MGT[Management Server<br/>WebSocket :18789]
+        HDL[Handlers<br/>chat.send / social.* / groups.* / files.*]
+        ARN[AgentRunner<br/>Interface]
+        ARP[AgentRunnerProcess<br/>stdin IPC]
+        CHL[ChildProcessRunner<br/>claude CLI fallback]
+        ARPS[agent-runner<br/>pre-compiled TS]
+        DS[DiscoveryEmitter]
+        MS[MemorySyncManager]
+        WR[WhatsAppPairingRelay]
+        GS[GroupsSyncHandler]
+        CSR[ChannelStatusReporter]
     end
 
     subgraph Containers["Isolated Containers"]
         C1[Agent Container 1<br/>Claude SDK]
-        C2[Agent Container 2<br/>Claude SDK]
-        C3[Agent Container N<br/>Claude SDK]
+        C2[Agent Container N<br/>Claude SDK]
     end
 
     subgraph Storage["Filesystem"]
-        GF[groups/<br/>Per-group folders]
-        GM[global/<br/>Shared memory]
+        GF[groups/ or chats/<br/>Per-group folders]
+        GM[shared/<br/>Shared memory + knowledge]
         IPCF[data/ipc/<br/>IPC files]
         SS[data/sessions/<br/>Agent sessions]
     end
 
     API[Anthropic API]
+    BCL[BearClaw Platform<br/>Go API]
 
     Channels --> CR --> ORC
     ORC <--> DB
@@ -56,6 +76,16 @@ graph TB
     Containers <--> GF
     Containers -.-> GM
     Containers <--> SS
+    ORC <--> APR
+
+    BCL -->|WebSocket| MGT
+    MGT --> HDL
+    HDL --> ARN
+    ARN --> ARP
+    ARN --> CHL
+    ARP --> ARPS
+    ARPS --> API
+    MGT --> DS & MS & WR & GS & CSR
 ```
 
 ---
@@ -214,6 +244,141 @@ Each channel implements the `Channel` interface and provides two callbacks: `onM
 
 ---
 
+## Deployment Modes
+
+NanoClaw selects its runtime mode via the `AGENT_MODE` environment variable:
+
+```mermaid
+graph LR
+    subgraph CliMode["AGENT_MODE=cli (default)"]
+        direction TB
+        IDX[index.ts<br/>Orchestrator]
+        CPR[ChildProcessRunner<br/>spawns claude CLI]
+        CTR[Docker / Apple Container<br/>per-group isolation]
+        IDX --> CPR --> CTR
+    end
+
+    subgraph SdkMode["AGENT_MODE=sdk (K8s platform)"]
+        direction TB
+        KE[k8s-entrypoint.ts]
+        MGS[ManagementServer<br/>WebSocket :18789]
+        ARP[AgentRunnerProcess<br/>stdin IPC]
+        AR[agent-runner<br/>pre-compiled TS binary]
+        KE --> MGS --> ARP --> AR
+    end
+```
+
+- **`cli` mode** — `src/index.ts` polls SQLite for messages, routes them through a group queue, and spawns isolated containers.
+- **`sdk` mode** — `src/k8s-entrypoint.ts` starts a `ManagementServer`. BearClaw Platform connects over WebSocket and drives agents via JSON-framed protocol (auth → req/res/event frames). The `AgentRunnerProcess` spawns the pre-compiled agent-runner with stdin-based IPC.
+
+---
+
+## Management Layer (sdk mode)
+
+The management layer is a WebSocket server that BearClaw Platform uses to control NanoClaw agents in K8s deployments.
+
+```mermaid
+graph TB
+    subgraph Platform["BearClaw Platform"]
+        NC_CLIENT[nc_client.go<br/>Go gateway client]
+    end
+
+    subgraph ManagementServer["ManagementServer (src/management/)"]
+        AUTH[Auth handler<br/>token validation]
+        PROTO[Protocol<br/>auth / req / res / event frames]
+        HDL[Handlers<br/>chat.send, chat.abort,<br/>social.generate, social.publish, social.monitor,<br/>channels.status, whatsapp.pair,<br/>groups.sync, files.sync, files.list]
+        ARN[AgentRunner interface]
+        ARP[AgentRunnerProcess]
+        ARPR[AgentRunnerParser<br/>sandwich markers]
+        CRL[ChildProcessRunner<br/>CLI fallback]
+    end
+
+    subgraph SubModules["Management Sub-modules"]
+        DS[DiscoveryEmitter<br/>unregistered chat discovery]
+        MS[MemorySyncManager<br/>shared memory polling]
+        WR[WhatsAppPairingRelay<br/>QR code relay]
+        GS[GroupsSyncHandler<br/>group list sync]
+        CSR[ChannelStatusReporter<br/>connection status]
+        SP[SocialPublishHandler<br/>XDK x_post / x_reply / x_quote]
+    end
+
+    NC_CLIENT -->|WebSocket| AUTH
+    AUTH --> PROTO
+    PROTO --> HDL
+    HDL --> ARN
+    ARN --> ARP & CRL
+    ARP --> ARPR
+    HDL --> SP
+    HDL -.-> DS & MS & WR & GS & CSR
+```
+
+**Protocol frames:** Each message is a JSON object with `type` discriminator. The handshake sends `{type:"auth", token}` → receives `{type:"auth", ok:true}`. Requests are `{type:"req", id, method, params}` → responses `{type:"res", id, ok, result|error}`. Server pushes `{type:"event", event, payload}`.
+
+---
+
+## Approval System
+
+Containers can request human approval before executing sensitive social actions. The approval loop uses SQLite persistence and IPC files.
+
+```mermaid
+sequenceDiagram
+    participant AG as Container Agent
+    participant IPC as IPC Watcher (host)
+    participant APR as Approval Store (SQLite)
+    participant CH as Channel (notify)
+    participant US as User (approve)
+    participant ARDIR as ipc/{group}/approval_results/
+
+    AG->>IPC: Write request_approval JSON to ipc/{group}/tasks/
+    IPC->>APR: Create PendingApproval (status: pending)
+    IPC->>CH: Notify user via configured channel
+
+    Note over APR: Expiry timer runs (default 60 min)
+
+    alt User approves / rejects
+        US->>APR: Resolve (approved | rejected)
+        APR->>ARDIR: Write result JSON
+        AG->>ARDIR: Poll for result file
+    else Expires
+        APR->>APR: Status → expired
+    end
+```
+
+**Approval policy** (`approval-policy.json`): defines per-action `mode` (`auto`, `confirm`, `block`), `notifyChannels`, and `expiryMinutes`. Loaded at startup; defaults to `confirm` for all actions.
+
+---
+
+## X (Twitter) Integration
+
+X integration ships as container skills, loaded at runtime. The `AgentRunnerProcess` carries skills into the container alongside the agent-runner binary.
+
+```mermaid
+graph TB
+    subgraph ContainerSkills["container/skills/x-integration/"]
+        TOOLS[MCP Tools<br/>x_post, x_reply, x_quote,<br/>x_timeline, x_search]
+        XA[X Actions Module<br/>wraps XDK SDK calls]
+        XC[XDK Client Wrapper<br/>@xdevplatform/xdk]
+    end
+
+    subgraph Publishing["Social Publish (management layer)"]
+        SP[social-publish.ts<br/>handleSocialPublish()]
+        XDK[@xdevplatform/xdk<br/>Client]
+    end
+
+    SM[social.monitor<br/>gateway handler] --> SMP[SocialMonitor<br/>pipeline orchestrator]
+    SMP --> SDD[Deduplication Store]
+    SMP --> DPB[Decision Prompt Builder]
+    SMP --> EL[Engagement Log]
+    SMP --> XC
+
+    SP --> XDK
+    TOOLS --> XA --> XC
+```
+
+**Credential injection:** `X_ACCESS_TOKEN` is injected by OneCLI at container startup. The agent-runner never sees raw API keys.
+
+---
+
 ## Scheduled Tasks
 
 ```mermaid
@@ -345,13 +510,18 @@ erDiagram
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
+| `AGENT_MODE` | `cli` | `cli` = standalone, `sdk` = K8s WebSocket management server |
 | `ASSISTANT_NAME` | `@Andy` | Trigger word prefix |
-| `POLL_INTERVAL` | 2000ms | Message polling frequency |
+| `POLL_INTERVAL` | 2000ms | Message polling frequency (cli mode) |
 | `CONTAINER_TIMEOUT` | 1800s | Max container runtime |
 | `IDLE_TIMEOUT` | 1800s | Keep idle container alive |
-| `MAX_CONCURRENT_CONTAINERS` | 5 | Concurrency limit |
+| `MAX_CONCURRENT_CONTAINERS` | 5 | Concurrency limit (cli mode) |
+| `MAX_CONCURRENT_AGENTS` | 3 | Concurrency limit (sdk mode) |
+| `MANAGEMENT_PORT` | 18789 | WebSocket management server port (sdk mode) |
 | `IPC_POLL_INTERVAL` | 1000ms | IPC file check frequency |
 | `SCHEDULER_POLL_INTERVAL` | 60000ms | Task scheduler check |
+| `SYSTEM_PROMPT` | — | Per-instance system prompt injected by platform |
+| `X_ACCESS_TOKEN` | — | Injected by OneCLI; used by X integration and social-publish |
 
 ---
 
@@ -359,18 +529,36 @@ erDiagram
 
 | File | Purpose |
 |------|---------|
-| `src/index.ts` | Orchestrator: state, message loop, agent invocation |
+| `src/index.ts` | Orchestrator: state, message loop, agent invocation (cli mode) |
+| `src/k8s-entrypoint.ts` | K8s entrypoint: starts ManagementServer + channels (sdk mode) |
 | `src/db.ts` | SQLite schema and queries |
 | `src/container-runner.ts` | Spawn containers with mounts |
 | `src/container-runtime.ts` | Runtime abstraction (Apple Container/Docker/Podman) |
 | `src/credential-proxy.ts` | Secure credential injection proxy |
+| `src/child-process-runner.ts` | AgentRunner impl: spawns claude CLI directly |
+| `src/agent-runner-process.ts` | AgentRunner impl: spawns pre-compiled agent-runner via stdin IPC |
+| `src/approval.ts` | Approval policy loader, SQLite store, IPC result writer |
 | `src/group-queue.ts` | Per-group concurrency control |
 | `src/task-scheduler.ts` | Scheduled task execution |
 | `src/ipc.ts` | Host-container IPC watcher |
 | `src/router.ts` | Message formatting and channel lookup |
 | `src/config.ts` | Environment-driven configuration |
 | `src/types.ts` | Core interfaces |
+| `src/shared-prompt.ts` | Shared system prompt fragments (SHARED_RESOURCE_PROMPT, X_INTEGRATION_PROMPT) |
 | `src/channels/registry.ts` | Channel factory pattern |
 | `src/channels/*.ts` | Channel implementations |
-| `container/Dockerfile` | Agent container image |
-| `container/agent-runner/` | Container entrypoint and agent SDK wrapper |
+| `src/management/server.ts` | WebSocket ManagementServer (sdk mode) |
+| `src/management/protocol.ts` | Frame types: auth, req, res, event |
+| `src/management/handlers.ts` | Handler registry: chat.send, social.*, groups.*, files.* |
+| `src/management/agent-runner.ts` | AgentRunner interface |
+| `src/management/agent-runner-parser.ts` | Streaming sandwich-marker parser for agent-runner output |
+| `src/management/social-publish.ts` | Social publish via XDK (x_post, x_reply, x_quote) |
+| `src/management/discovery.ts` | DiscoveryEmitter: unregistered chat detection |
+| `src/management/memory-sync.ts` | MemorySyncManager: shared memory file polling |
+| `src/management/whatsapp-relay.ts` | WhatsAppPairingRelay: QR code relay for pairing |
+| `src/management/groups-sync.ts` | GroupsSyncHandler: group list sync |
+| `src/management/channel-status.ts` | ChannelStatusReporter: connection status |
+| `container/Dockerfile` | Agent container image (cli mode) |
+| `container/Dockerfile.ws` | K8s WebSocket container image (sdk mode, Chromium pre-installed) |
+| `container/agent-runner/` | Pre-compiled TypeScript agent-runner with stdin IPC |
+| `container/skills/` | Container-loaded skills (X integration, browser, status, formatting) |
